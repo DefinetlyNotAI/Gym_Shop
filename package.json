@@ -24,7 +24,7 @@
     "@neondatabase/serverless": "1.1.0",
     "@node-rs/argon2": "2.2.0",
     "@simplewebauthn/server": "14.0.1",
-    "drizzle-orm": "0.45.2",
+    "drizzle-orm": "1.0.0-rc.4",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -32,12 +32,13 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@eslint/compat": "2.1.1",
     "@types/node": "26.5.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@types/ws": "8.18.1",
-    "drizzle-kit": "0.31.10",
-    "eslint": "9.39.5",
+    "drizzle-kit": "1.0.0-rc.4",
+    "eslint": "10.10.0",
     "eslint-config-next": "16.3.4",
     "typescript": "5.9.3",
     "vitest": "5.0.0"

@@ -7,7 +7,6 @@ import { drizzle as drizzleNeon } from "drizzle-orm/neon-serverless";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import ws from "ws";
 import { getRuntimeConfig, requireDatabaseUrl } from "@/lib/config/env";
-import * as schema from "@/lib/db/generated/schema";
 
 neonConfig.webSocketConstructor = ws;
 
@@ -110,7 +109,7 @@ async function simulationDatabase(): Promise<SimulationDatabase> {
       const { pgcrypto } = await import("@electric-sql/pglite/contrib/pgcrypto");
       const raw = new PGlite({ extensions: { pgcrypto } });
       await raw.waitReady;
-      const orm = drizzlePglite({ client: raw, schema }) as unknown as TransactionalDrizzleExecutor;
+      const orm = drizzlePglite({ client: raw }) as unknown as TransactionalDrizzleExecutor;
       const client = createDatabaseClient(orm);
       const migrations = join(process.cwd(), "db", "migrations");
       for (const name of (await readdir(migrations)).filter((entry) => entry.endsWith(".sql")).sort()) {
@@ -129,7 +128,7 @@ export async function withDatabaseClient<T>(work: (client: DatabaseClient) => Pr
     return work(createDatabaseClient(database.orm));
   }
   const pool = new Pool({ connectionString: requireDatabaseUrl(), max: 1 });
-  const orm = drizzleNeon({ client: pool, schema }) as unknown as DrizzleExecutor;
+  const orm = drizzleNeon({ client: pool }) as unknown as DrizzleExecutor;
   try {
     return await work(createDatabaseClient(orm));
   } finally {
@@ -143,7 +142,7 @@ export async function withTransaction<T>(work: (client: DatabaseClient) => Promi
     return database.orm.transaction((transaction) => work(createDatabaseClient(transaction)));
   }
   const pool = new Pool({ connectionString: requireDatabaseUrl(), max: 1 });
-  const orm = drizzleNeon({ client: pool, schema });
+  const orm = drizzleNeon({ client: pool });
   try {
     return await orm.transaction((transaction) => work(createDatabaseClient(transaction as unknown as DrizzleExecutor)));
   } finally {

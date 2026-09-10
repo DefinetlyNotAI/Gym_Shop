@@ -6,7 +6,6 @@ import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { DatabaseClient } from "@/lib/db/client";
-import * as schema from "@/lib/db/generated/schema";
 
 let database: PGlite;
 let client: DatabaseClient;
@@ -46,7 +45,7 @@ describe("v0.1 operational journeys", () => {
     process.env.APP_ENV = "test";
     database = new PGlite({ extensions: { pgcrypto } });
     await database.waitReady;
-    orm = drizzlePglite({ client: database, schema });
+    orm = drizzlePglite({ client: database });
     client = createDatabaseClient(orm);
     for (const filename of (await readdir(resolve("db/migrations"))).filter((name) => name.endsWith(".sql")).sort()) await client.executeRaw(await readFile(resolve("db/migrations", filename), "utf8"));
   }, 30_000);

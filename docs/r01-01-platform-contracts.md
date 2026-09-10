@@ -29,7 +29,7 @@ Simulation is not production evidence. Preview and production reject `SIM_MODE`,
 
 ## Runtime and data
 
-- Next.js 16, React 19, TypeScript, npm workspaces, and Node.js 20.9 or newer.
+- Next.js 16, React 19, TypeScript, npm workspaces, and Node.js 20.19 or newer.
 - Neon PostgreSQL is the durable authority. All runtime persistence and transactions go through Drizzle ORM's Neon driver and the generated typed schema; migrations use a separately controlled owner URL.
 - Simmode uses the same Drizzle-facing client and transaction contract through Drizzle's PGlite driver. Only the underlying driver and storage lifetime differ.
 - Cloudflare R2 stores blobs. PostgreSQL stores ownership, access class, verified metadata, scan state, and retention references.
