@@ -1,0 +1,2 @@
+import{apiError,apiSuccess}from"@/lib/api/response";import{getCurrentAccount}from"@/lib/auth/session";import{inspectEmergencyState}from"@/lib/security/emergency";
+export async function GET(){try{const account=await getCurrentAccount();if(!account)throw new Error();return apiSuccess(await inspectEmergencyState(account));}catch{return apiError(403,{code:"EMERGENCY_SESSION_REQUIRED",message:"Emergency recovery authorization is required."});}}

@@ -1,0 +1,1 @@
+import{apiSuccess}from"@/lib/api/response";import{latestDocument}from"@/lib/admin/configuration";export async function GET(){const[termsEn,termsAr,privacyEn,privacyAr]=await Promise.all([latestDocument("TERMS","en"),latestDocument("TERMS","ar"),latestDocument("PRIVACY","en"),latestDocument("PRIVACY","ar")]);return apiSuccess({termsEn,termsAr,privacyEn,privacyAr});}

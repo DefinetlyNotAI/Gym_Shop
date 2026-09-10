@@ -1,0 +1,2 @@
+import {apiError,apiSuccess} from "@/lib/api/response";import {requireCustomer} from "@/lib/auth/authorization";import {getCurrentAccount} from "@/lib/auth/session";import {requestDeletion} from "@/lib/support/service";import {requireTrustedMutation} from "@/lib/security/request";
+export async function POST(request:Request){try{requireTrustedMutation(request);const account=requireCustomer(await getCurrentAccount());return apiSuccess(await requestDeletion(account.id));}catch{return apiError(409,{code:'DELETION_REQUEST_FAILED',message:'Deletion could not be scheduled.'});}}

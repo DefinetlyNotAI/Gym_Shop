@@ -1,0 +1,2 @@
+import{apiError,apiSuccess}from"@/lib/api/response";import{generateCtoRecoverySecret}from"@/lib/security/cto-setup";import{requireTrustedMutation}from"@/lib/security/request";
+export async function POST(request:Request){try{requireTrustedMutation(request);const{token}=await request.json();return apiSuccess(await generateCtoRecoverySecret(token));}catch(error){return apiError(400,{code:error instanceof Error?error.message:"RECOVERY_SECRET_FAILED",message:"Recovery passphrase could not be generated."});}}

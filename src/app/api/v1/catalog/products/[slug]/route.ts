@@ -1,0 +1,1 @@
+import{apiError,apiSuccess}from"@/lib/api/response";import{getProduct}from"@/lib/commerce/catalog";export async function GET(_request:Request,{params}:{params:Promise<{slug:string}>}){const product=await getProduct((await params).slug);return product?apiSuccess(product):apiError(404,{code:"PRODUCT_NOT_FOUND",message:"Product not found."});}

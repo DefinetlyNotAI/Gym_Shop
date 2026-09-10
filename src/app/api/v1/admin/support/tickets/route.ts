@@ -1,0 +1,2 @@
+import{apiError,apiSuccess}from"@/lib/api/response";import{requirePermission}from"@/lib/auth/authorization";import{getCurrentAccount}from"@/lib/auth/session";import{listSupportQueue}from"@/lib/support/service";
+export async function GET(){try{await requirePermission(await getCurrentAccount(),"support.manage");return apiSuccess({tickets:await listSupportQueue()});}catch{return apiError(403,{code:"PERMISSION_DENIED",message:"Permission denied."});}}
