@@ -13,6 +13,33 @@ type LanguageContextValue = {
 };
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
+const originalText = new WeakMap<Text, string>();
+const originalAttributes = new WeakMap<Element, Map<string, string>>();
+const LOCALIZED_ATTRIBUTES = ["aria-label", "placeholder", "title"] as const;
+
+function selectedHalf(value: string, language: Language) {
+  const parts = value.split(/\s+\/\s+/u);
+  if (parts.length !== 2 || !/[\u0600-\u06ff]/u.test(parts[1])) return value;
+  return language === "ar" ? parts[1] : parts[0];
+}
+
+function normalizeLegacyBilingualText(root: ParentNode, language: Language) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    const source = originalText.get(node) ?? node.data;
+    originalText.set(node, source);
+    const selected = selectedHalf(source, language);
+    if (node.data !== selected) node.data = selected;
+  }
+  const elements = root instanceof Element ? [root, ...root.querySelectorAll("*")] : [...root.querySelectorAll("*")];
+  for (const element of elements) for (const name of LOCALIZED_ATTRIBUTES) {
+    const current = element.getAttribute(name); if (current === null) continue;
+    const saved = originalAttributes.get(element) ?? new Map<string, string>();
+    if (!originalAttributes.has(element)) originalAttributes.set(element, saved);
+    const source = saved.get(name) ?? current; saved.set(name, source);
+    const selected = selectedHalf(source, language); if (current !== selected) element.setAttribute(name, selected);
+  }
+}
 
 function applyDocumentLanguage(language: Language) {
   document.documentElement.lang = language;
@@ -20,17 +47,23 @@ function applyDocumentLanguage(language: Language) {
 }
 
 export function LanguageProvider({ initialLanguage, children }: { initialLanguage: Language; children: React.ReactNode }) {
-  const [language, updateLanguage] = useState<Language>(initialLanguage);
+  const [language, updateLanguage] = useState<Language>(() => {
+    if (typeof window === "undefined") return initialLanguage;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored === "ar" || stored === "en" ? stored : initialLanguage;
+  });
   function setLanguage(next: Language) {
     updateLanguage(next);
     localStorage.setItem(STORAGE_KEY, next);
     document.cookie = `${COOKIE_NAME}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
   }
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "ar" || stored === "en") updateLanguage(stored);
-  }, []);
   useEffect(() => applyDocumentLanguage(language), [language]);
+  useEffect(() => {
+    normalizeLegacyBilingualText(document.body, language);
+    const observer = new MutationObserver((records) => { for (const record of records) for (const node of record.addedNodes) if (node instanceof Element) normalizeLegacyBilingualText(node, language); });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [language]);
   const value = useMemo<LanguageContextValue>(() => ({ language, setLanguage, text: (english, arabic) => language === "ar" ? arabic : english }), [language]);
   return <LanguageContext value={value}>{children}</LanguageContext>;
 }
