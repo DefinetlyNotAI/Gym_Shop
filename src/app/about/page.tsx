@@ -1,1 +1,2 @@
-export default function About(){return <main className="page prose"><h1>Built for movement.<br/><span dir="rtl">مصمم للحركة.</span></h1><p>Gym Shop is an Amman-focused apparel and accessories store built around reliable gear and clear service.</p><p dir="rtl">متجر جيم شوب في عمّان للملابس والإكسسوارات الرياضية، بخدمة واضحة ومنتجات موثوقة.</p></main>}
+import { LocalizedText as T } from "@/components/language-provider";
+export default function About(){return <main className="page prose"><h1><T en="Built for movement." ar="مصمم للحركة."/></h1><p><T en="Gym Shop is an Amman-focused apparel and accessories store built around reliable gear and clear service." ar="متجر جيم شوب في عمّان للملابس والإكسسوارات الرياضية، بخدمة واضحة ومنتجات موثوقة."/></p></main>}
