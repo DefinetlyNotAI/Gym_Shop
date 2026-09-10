@@ -3,6 +3,7 @@ import{AdminTools}from"@/components/admin-tools";
 import{OperationsConsole}from"@/components/operations-console";
 import{OrderActions}from"@/components/order-actions";
 import{StaffLogin}from"@/components/staff-login";
+import{LocalizedText as T}from"@/components/language-provider";
 import{SupportOperations}from"@/components/support-operations";
 import{apiGet,getSession}from"@/lib/api";
 
@@ -11,8 +12,8 @@ type Rows={products?:Record<string,unknown>[];inventory?:Record<string,unknown>[
 
 export default async function Admin(){
   const actor=await getSession();
-  if(!actor)return <main className="page"><p className="eyebrow">GYM SHOP STAFF</p><h1>Operations sign in / دخول العمليات</h1><StaffLogin/></main>;
-  if(actor.role==="CUSTOMER")return <main className="page"><h1>Staff access required / يلزم تصريح موظف</h1><a href={process.env.STOREFRONT_ORIGIN??"https://example.com"}>Return to customer store</a></main>;
+  if(!actor)return <main className="page"><p className="eyebrow"><T en="GYM SHOP STAFF" ar="موظفو جيم شوب"/></p><h1><T en="Operations sign in" ar="دخول العمليات"/></h1><StaffLogin/></main>;
+  if(actor.role==="CUSTOMER")return <main className="page"><h1><T en="Staff access required" ar="يلزم تصريح موظف"/></h1><a href={process.env.STOREFRONT_ORIGIN??"https://example.com"}><T en="Return to customer store" ar="العودة إلى متجر العملاء"/></a></main>;
   if(actor.role==="DELIVERY_AGENT")redirect("/delivery");
 
   const canCatalog=["CTO","SUPER_ADMIN","ADMIN","LOGISTICS_STAFF"].includes(actor.role);
