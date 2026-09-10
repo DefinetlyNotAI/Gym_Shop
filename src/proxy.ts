@@ -15,7 +15,7 @@ function contentSecurityPolicy(nonce: string): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    `style-src 'self' ${development ? "'unsafe-inline'" : `'nonce-${nonce}'`}`,
     `style-src-attr ${development ? "'unsafe-inline'" : "'none'"}`,
     `connect-src 'self'${development ? " ws:" : ""}${uploadOrigin ? ` ${uploadOrigin}` : ""}`,
     `img-src 'self' data: blob:${uploadOrigin ? ` ${uploadOrigin}` : ""}${mediaOrigin ? ` ${mediaOrigin}` : ""}`,
