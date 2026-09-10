@@ -1,0 +1,21 @@
+"use client";
+
+import{useState}from"react";
+
+type Address={id:string;recipient:string;phone_e164:string;country:string;city:string;area:string;street:string;building:string|null;floor:string|null;unit:string|null;landmark:string|null;shipping_default:boolean;billing_default:boolean};
+type Account={displayName:string;phone?:string|null};
+
+async function request(path:string,method:string,body?:unknown){const response=await fetch(path,{method,headers:{"content-type":"application/json"},body:body?JSON.stringify(body):undefined});const data=await response.json();if(!response.ok)throw new Error(data.error?.code??"REQUEST_FAILED");return data.data;}
+function addressBody(form:FormData){return{recipient:form.get("recipient"),phone:form.get("phone"),country:form.get("country")||"Jordan",city:form.get("city"),area:form.get("area"),street:form.get("street"),building:form.get("building")||undefined,floor:form.get("floor")||undefined,unit:form.get("unit")||undefined,landmark:form.get("landmark")||undefined,shippingDefault:form.get("shippingDefault")==="on",billingDefault:form.get("billingDefault")==="on"};}
+
+export function ProfileAddresses({account,initialAddresses}:{account:Account;initialAddresses:Address[]}){
+  const[message,setMessage]=useState("");
+  async function run(action:()=>Promise<unknown>){try{const result=await action();setMessage(`Saved: ${JSON.stringify(result)}`);location.reload();}catch(error){setMessage(error instanceof Error?error.message:"Request failed");}}
+  return <>
+    <section className="panel"><h2>Profile / الملف الشخصي</h2><form action={form=>run(()=>request("/api/v1/account","PATCH",{displayName:form.get("displayName"),phone:form.get("phone")}))}><label>Name / الاسم<input name="displayName" required minLength={2} defaultValue={account.displayName}/></label><label>Phone / الهاتف<input name="phone" required pattern="\+[1-9][0-9]{7,14}" defaultValue={account.phone??""}/></label><button className="secondary">Save profile</button></form><p>Changing the phone number requires a fresh WhatsApp verification before checkout.</p></section>
+    <section className="panel"><h2>Saved addresses / العناوين المحفوظة</h2><details><summary>Add address / إضافة عنوان</summary><AddressForm onSubmit={form=>run(()=>request("/api/v1/account/addresses","POST",addressBody(form)))}/></details><div className="list">{initialAddresses.map(address=><article key={address.id}><details><summary>{address.recipient} · {address.city}, {address.area}</summary><AddressForm address={address} onSubmit={form=>run(()=>request("/api/v1/account/addresses","PATCH",{id:address.id,...addressBody(form)}))}/><button className="secondary" onClick={()=>run(()=>request(`/api/v1/account/addresses?id=${encodeURIComponent(address.id)}`,"DELETE"))}>Delete address / حذف العنوان</button></details></article>)}</div></section>
+    <p aria-live="polite">{message}</p>
+  </>;
+}
+
+function AddressForm({address,onSubmit}:{address?:Address;onSubmit:(form:FormData)=>void}){return <form action={onSubmit} className="form-grid"><label>Recipient / المستلم<input name="recipient" required defaultValue={address?.recipient}/></label><label>Phone / الهاتف<input name="phone" required defaultValue={address?.phone_e164}/></label><label>Country / الدولة<input name="country" required defaultValue={address?.country??"Jordan"}/></label><label>City / المدينة<input name="city" required defaultValue={address?.city}/></label><label>Area / المنطقة<input name="area" required defaultValue={address?.area}/></label><label>Street / الشارع<input name="street" required defaultValue={address?.street}/></label><label>Building / المبنى<input name="building" defaultValue={address?.building??""}/></label><label>Floor / الطابق<input name="floor" defaultValue={address?.floor??""}/></label><label>Unit / الوحدة<input name="unit" defaultValue={address?.unit??""}/></label><label>Landmark / علامة مميزة<input name="landmark" defaultValue={address?.landmark??""}/></label><label className="check"><input name="shippingDefault" type="checkbox" defaultChecked={address?.shipping_default}/>Default shipping</label><label className="check"><input name="billingDefault" type="checkbox" defaultChecked={address?.billing_default}/>Default billing</label><button className="secondary">Save address</button></form>}

@@ -1,0 +1,1 @@
+import{Storefront}from"@/components/storefront";import{apiGet}from"@/lib/api";import type{CatalogProduct}from"@/lib/contracts";export const dynamic="force-dynamic";export default async function Shop(){const result=await apiGet<{products:CatalogProduct[]}>("/api/v1/catalog/products");return <Storefront initialProducts={result!.products}/>;}

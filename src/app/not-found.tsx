@@ -1,0 +1,1 @@
+import Link from"next/link";export default function NotFound(){return <main className="page"><p className="eyebrow">404</p><h1>That page moved.<br/><span dir="rtl">الصفحة غير موجودة.</span></h1><p>Return to the shop or search the current collection.</p><div className="quick-grid"><Link href="/shop">Shop / المتجر</Link><Link href="/">Home / الرئيسية</Link></div></main>}
