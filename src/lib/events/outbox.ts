@@ -1,4 +1,4 @@
-import type { PoolClient } from "@neondatabase/serverless";
+import type { DatabaseClient } from "@/lib/db/client";
 import { withTransaction } from "@/lib/db/client";
 
 export type DomainEventInput = {
@@ -18,8 +18,8 @@ export type ClaimedEvent = {
   attempt_count: number;
 };
 
-export async function appendDomainEvent(client: PoolClient, event: DomainEventInput): Promise<string> {
-  const result = await client.query<{ id: string }>(
+export async function appendDomainEvent(client: DatabaseClient, event: DomainEventInput): Promise<string> {
+  const result = await client.execute<{ id: string }>(
     `INSERT INTO domain_event_outbox
       (event_type, aggregate_type, aggregate_id, payload, available_at)
      VALUES ($1, $2, $3, $4::jsonb, COALESCE($5, now()))
@@ -31,7 +31,7 @@ export async function appendDomainEvent(client: PoolClient, event: DomainEventIn
 
 export async function claimEvents(workerId: string, batchSize: number): Promise<ClaimedEvent[]> {
   return withTransaction(async (client) => {
-    const result = await client.query<ClaimedEvent>(
+    const result = await client.execute<ClaimedEvent>(
       `WITH candidates AS (
          SELECT id
          FROM domain_event_outbox
@@ -64,7 +64,7 @@ export function retryDelaySeconds(attempt: number): number {
 
 export async function markDelivered(eventId: string, workerId: string): Promise<void> {
   await withTransaction(async (client) => {
-    const result = await client.query(
+    const result = await client.execute(
       `UPDATE domain_event_outbox
        SET delivered_at = now(), lease_owner = NULL, lease_until = NULL
        WHERE id = $1 AND lease_owner = $2 AND delivered_at IS NULL`,
@@ -83,7 +83,7 @@ export async function markFailed(
   const dead = attempt >= 12;
   const delay = retryDelaySeconds(attempt);
   await withTransaction(async (client) => {
-    const result = await client.query(
+    const result = await client.execute(
       `UPDATE domain_event_outbox
        SET last_error = left($3, 500),
            available_at = now() + ($4 * interval '1 second'),

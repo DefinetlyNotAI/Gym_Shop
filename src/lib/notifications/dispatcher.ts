@@ -37,15 +37,15 @@ async function prepare(event: ClaimedEvent): Promise<Delivery[]> {
   return withTransaction(async (client) => {
     let accountId = typeof event.payload.accountId === "string" ? event.payload.accountId : null;
     if (!accountId && typeof event.payload.orderId === "string") {
-      accountId = (await client.query<{ account_id: string }>("SELECT account_id FROM shop_order WHERE id=$1", [event.payload.orderId])).rows[0]?.account_id ?? null;
+      accountId = (await client.execute<{ account_id: string }>("SELECT account_id FROM shop_order WHERE id=$1", [event.payload.orderId])).rows[0]?.account_id ?? null;
     }
     if (!accountId && typeof event.payload.ticketId === "string") {
-      accountId = (await client.query<{ account_id: string }>("SELECT account_id FROM support_ticket WHERE id=$1", [event.payload.ticketId])).rows[0]?.account_id ?? null;
+      accountId = (await client.execute<{ account_id: string }>("SELECT account_id FROM support_ticket WHERE id=$1", [event.payload.ticketId])).rows[0]?.account_id ?? null;
     }
     if (!accountId) return [];
 
     const category = event.event_type.split(".")[0];
-    await client.query(
+    await client.execute(
       `INSERT INTO notification(event_id,recipient_id,channel,category,entity_type,entity_id,status,delivered_at)
        VALUES($1,$2,'IN_SITE',$3,$4,$5,'DELIVERED',now())
        ON CONFLICT(event_id,recipient_id,channel) DO NOTHING`,
@@ -53,7 +53,7 @@ async function prepare(event: ClaimedEvent): Promise<Delivery[]> {
     );
 
     let channel = eventChannels[event.event_type];
-    const encrypted = await client.query<{ ciphertext: string }>(
+    const encrypted = await client.execute<{ ciphertext: string }>(
       "SELECT ciphertext FROM outbound_secret WHERE event_id=$1 AND consumed_at IS NULL AND expires_at>now() FOR UPDATE",
       [event.id],
     );
@@ -61,14 +61,14 @@ async function prepare(event: ClaimedEvent): Promise<Delivery[]> {
     if ((event.event_type === "security.cto.setup_contact.v1" || event.event_type === "security.cto.emergency_contact.v1") && event.payload.channel === "PHONE") channel = "WHATSAPP";
     if (!channel) return [];
 
-    const account = await client.query<{ email_normalized: string; phone_e164: string | null; status:string }>(
+    const account = await client.execute<{ email_normalized: string; phone_e164: string | null; status:string }>(
       "SELECT email_normalized,phone_e164,status FROM account WHERE id=$1",
       [accountId],
     );
     const destination = secret?.destination ?? (channel === "EMAIL" ? account.rows[0]?.email_normalized : account.rows[0]?.phone_e164);
     if (!destination) throw new Error("NOTIFICATION_DESTINATION_MISSING");
 
-    const template = await client.query<{ id: string; subject: string | null; body: string }>(
+    const template = await client.execute<{ id: string; subject: string | null; body: string }>(
       `SELECT id,subject,body FROM notification_template
        WHERE event_type=$1 AND channel=$2 AND language='en' AND enabled
        ORDER BY version DESC LIMIT 1`,
@@ -78,12 +78,12 @@ async function prepare(event: ClaimedEvent): Promise<Delivery[]> {
     if (!selected) return [];
 
     if(category==="marketing"){
-      const preference=await client.query<{enabled:boolean}>("SELECT enabled FROM notification_preference WHERE account_id=$1 AND category=$2 AND channel=$3",[accountId,category,channel]);
-      const consent=channel==="EMAIL"?await client.query<{granted:boolean}>("SELECT granted FROM consent_event WHERE account_id=$1 AND purpose='MARKETING_EMAIL' ORDER BY occurred_at DESC LIMIT 1",[accountId]):null;
+      const preference=await client.execute<{enabled:boolean}>("SELECT enabled FROM notification_preference WHERE account_id=$1 AND category=$2 AND channel=$3",[accountId,category,channel]);
+      const consent=channel==="EMAIL"?await client.execute<{granted:boolean}>("SELECT granted FROM consent_event WHERE account_id=$1 AND purpose='MARKETING_EMAIL' ORDER BY occurred_at DESC LIMIT 1",[accountId]):null;
       const allowed=account.rows[0]?.status==="ACTIVE"&&preference.rows[0]?.enabled!==false&&(channel!=="EMAIL"||consent?.rows[0]?.granted===true);
       if(!allowed){
-        const suppressed=await client.query<{id:string}>(`INSERT INTO notification(event_id,recipient_id,channel,category,entity_type,entity_id,template_id,status,permanent_failure,failure_code) VALUES($1,$2,$3,$4,$5,$6,$7,'SUPPRESSED',true,'PREFERENCE_OR_STATUS') ON CONFLICT(event_id,recipient_id,channel) DO UPDATE SET updated_at=notification.updated_at RETURNING id`,[event.id,accountId,channel,category,event.aggregate_type,event.aggregate_id,selected.id]);
-        await client.query("INSERT INTO notification_attempt(notification_id,attempt_number,result,failure_code) VALUES($1,1,'SUPPRESSED','PREFERENCE_OR_STATUS') ON CONFLICT DO NOTHING",[suppressed.rows[0].id]);
+        const suppressed=await client.execute<{id:string}>(`INSERT INTO notification(event_id,recipient_id,channel,category,entity_type,entity_id,template_id,status,permanent_failure,failure_code) VALUES($1,$2,$3,$4,$5,$6,$7,'SUPPRESSED',true,'PREFERENCE_OR_STATUS') ON CONFLICT(event_id,recipient_id,channel) DO UPDATE SET updated_at=notification.updated_at RETURNING id`,[event.id,accountId,channel,category,event.aggregate_type,event.aggregate_id,selected.id]);
+        await client.execute("INSERT INTO notification_attempt(notification_id,attempt_number,result,failure_code) VALUES($1,1,'SUPPRESSED','PREFERENCE_OR_STATUS') ON CONFLICT DO NOTHING",[suppressed.rows[0].id]);
         return[];
       }
     }
@@ -99,14 +99,14 @@ async function prepare(event: ClaimedEvent): Promise<Delivery[]> {
     };
     const subject = selected.subject ? interpolate(selected.subject, variables) : undefined;
     const body = interpolate(selected.body, variables);
-    const inserted = await client.query<{ id: string }>(
+    const inserted = await client.execute<{ id: string }>(
       `INSERT INTO notification(event_id,recipient_id,channel,category,entity_type,entity_id,template_id,status,subject_snapshot,body_snapshot)
        VALUES($1,$2,$3,$4,$5,$6,$7,'QUEUED',$8,$9)
        ON CONFLICT(event_id,recipient_id,channel) DO UPDATE SET updated_at=notification.updated_at
        RETURNING id`,
       [event.id, accountId, channel, category, event.aggregate_type, event.aggregate_id, selected.id, subject ?? null, secret ? selected.body : body],
     );
-    const pending = await client.query<{ attempt_count: number; status: string; permanent_failure: boolean }>(
+    const pending = await client.execute<{ attempt_count: number; status: string; permanent_failure: boolean }>(
       "SELECT attempt_count,status,permanent_failure FROM notification WHERE id=$1 FOR UPDATE",
       [inserted.rows[0].id],
     );
@@ -123,12 +123,12 @@ async function recordResult(
 ): Promise<void> {
   await withTransaction(async (client) => {
     const attempt = delivery.attemptCount + 1;
-    await client.query(
+    await client.execute(
       `INSERT INTO notification_attempt(notification_id,attempt_number,result,provider_message_id,failure_code)
        VALUES($1,$2,$3,$4,$5) ON CONFLICT(notification_id,attempt_number) DO NOTHING`,
       [delivery.id, attempt, result, providerMessageId ?? null, failureCode ?? null],
     );
-    await client.query(
+    await client.execute(
       `UPDATE notification SET attempt_count=GREATEST(attempt_count,$2),status=$3,
        provider_message_id=COALESCE($4,provider_message_id),failure_code=$5,permanent_failure=$6,
        sent_at=CASE WHEN $3 IN ('SENT','DELIVERED') THEN COALESCE(sent_at,now()) ELSE sent_at END,
@@ -137,11 +137,11 @@ async function recordResult(
        WHERE id=$1`,
       [delivery.id, attempt, result === "TRANSIENT_FAILURE" || result === "PERMANENT_FAILURE" ? "FAILED" : result, providerMessageId ?? null, failureCode ?? null, result === "PERMANENT_FAILURE"],
     );
-    if (result !== "TRANSIENT_FAILURE") await client.query("DELETE FROM outbound_secret WHERE event_id=$1", [delivery.eventId]);
+    if (result !== "TRANSIENT_FAILURE") await client.execute("DELETE FROM outbound_secret WHERE event_id=$1", [delivery.eventId]);
     if ((result === "SENT" || result === "DELIVERED") && delivery.aggregateType === "phone_verification_request") {
-      await client.query("UPDATE phone_verification_request SET status='SENT' WHERE id=$1 AND status='QUEUED'", [delivery.aggregateId]);
+      await client.execute("UPDATE phone_verification_request SET status='SENT' WHERE id=$1 AND status='QUEUED'", [delivery.aggregateId]);
     }
-    if (result === "PERMANENT_FAILURE" && delivery.aggregateType === "phone_verification_request") await client.query("UPDATE phone_verification_request SET status='FAILED' WHERE id=$1",[delivery.aggregateId]);
+    if (result === "PERMANENT_FAILURE" && delivery.aggregateType === "phone_verification_request") await client.execute("UPDATE phone_verification_request SET status='FAILED' WHERE id=$1",[delivery.aggregateId]);
   });
 }
 

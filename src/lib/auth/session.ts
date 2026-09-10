@@ -22,7 +22,7 @@ export type CurrentAccount = {
 
 export async function createSession(accountId: string, metadata?: { userAgent?: string }): Promise<string> {
   const token = randomToken();
-  await withDatabaseClient((client) => client.query(
+  await withDatabaseClient((client) => client.execute(
     `INSERT INTO account_session(account_id, token_hash, expires_at, user_agent)
      SELECT $1,$2,now()+CASE WHEN EXISTS(SELECT 1 FROM staff_account WHERE account_id=$1) THEN interval '12 hours' ELSE ($3 * interval '1 second') END,$4`,
     [accountId, hashToken(token), CUSTOMER_SESSION_SECONDS, metadata?.userAgent?.slice(0, 500) ?? null],
@@ -45,7 +45,7 @@ export async function clearSession(): Promise<void> {
   const jar = await cookies();
   const token = jar.get(COOKIE_NAME)?.value;
   if (token) {
-    await withDatabaseClient((client) => client.query(
+    await withDatabaseClient((client) => client.execute(
       "UPDATE account_session SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL",
       [hashToken(token)],
     ).then(() => undefined));
@@ -57,7 +57,7 @@ export async function getCurrentAccount(): Promise<CurrentAccount | null> {
   const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (!token) return null;
   return withTransaction(async (client) => {
-    const result = await client.query<{
+    const result = await client.execute<{
       id: string; public_id: string; email_normalized: string; display_name: string; status: string;
       email_verified_at: Date | null; phone_verified_at: Date | null; phone_e164:string|null; role_id: string | null;
       session_id: string; authenticated_at: Date; session_kind:"NORMAL"|"EMERGENCY";
@@ -75,7 +75,7 @@ export async function getCurrentAccount(): Promise<CurrentAccount | null> {
     );
     const row = result.rows[0];
     if (!row || ["LOCKED", "DISABLED", "DELETED"].includes(row.status)) return null;
-    await client.query("UPDATE account_session SET last_seen_at = now() WHERE id = $1", [row.session_id]);
+    await client.execute("UPDATE account_session SET last_seen_at = now() WHERE id = $1", [row.session_id]);
     return {
       id: row.id, publicId: row.public_id, email: row.email_normalized, displayName: row.display_name,
       status: row.status, emailVerified: Boolean(row.email_verified_at), phoneVerified: Boolean(row.phone_verified_at),phone:row.phone_e164,

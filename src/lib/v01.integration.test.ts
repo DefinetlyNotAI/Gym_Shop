@@ -3,17 +3,23 @@ import { resolve } from "node:path";
 import { hash } from "@node-rs/argon2";
 import { PGlite } from "@electric-sql/pglite";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
+import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import type { DatabaseClient } from "@/lib/db/client";
+import * as schema from "@/lib/db/generated/schema";
 
 let database: PGlite;
-vi.mock("@/lib/db/client", () => ({
-  withDatabaseClient: async <T>(work: (client: PGlite) => Promise<T>) => work(database),
-  withTransaction: async <T>(work: (client: PGlite) => Promise<T>) => {
-    await database.query("BEGIN");
-    try { const result = await work(database); await database.query("COMMIT"); return result; }
-    catch (error) { await database.query("ROLLBACK"); throw error; }
-  },
-}));
+let client: DatabaseClient;
+let orm: ReturnType<typeof drizzlePglite>;
+vi.mock("@/lib/db/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/db/client")>();
+  return {
+    ...actual,
+    withDatabaseClient: async <T>(work: (databaseClient: DatabaseClient) => Promise<T>) => work(client),
+    withTransaction: async <T>(work: (databaseClient: DatabaseClient) => Promise<T>) =>
+      orm.transaction((transaction) => work(actual.createDatabaseClient(transaction))),
+  };
+});
 
 import { applyCardPaymentStatus, checkout, confirmLocalCardPayment, cancelOrder } from "@/lib/commerce/orders";
 import { acceptDeliveryCustody, completeDelivery, dispatchOrder, packOrder, recordFailedDelivery } from "@/lib/commerce/fulfillment";
@@ -22,23 +28,27 @@ import { finalizeDueDeletions, requestDeletion } from "@/lib/support/service";
 import { activateLockdown, finishEmergencyRecovery, recordEmergencyFailure } from "@/lib/security/emergency";
 import { decryptOutboundSecret } from "@/lib/notifications/secrets";
 import type { CurrentAccount } from "@/lib/auth/session";
+import { createDatabaseClient } from "@/lib/db/client";
 
-async function row<T>(sql: string, parameters: unknown[] = []) { return (await database.query<T>(sql, parameters)).rows[0]; }
+async function row<T extends Record<string, unknown>>(sql: string, parameters: unknown[] = []) { return (await client.execute<T>(sql, parameters)).rows[0]; }
 async function createAccount(email: string, displayName: string, role?: string) {
   const account = await row<{ id: string; public_id: string }>("INSERT INTO account(email_normalized,password_hash,display_name,phone_e164,status,email_verified_at,phone_verified_at) VALUES($1,'hash',$2,$3,'ACTIVE',now(),now()) RETURNING id,public_id", [email, displayName, `+96279${String(Math.floor(Math.random() * 10000000)).padStart(7, "0")}`]);
-  if (role) await database.query("INSERT INTO staff_account(account_id,role_id,status,mfa_completed_at) VALUES($1,$2,'ACTIVE',now())", [account.id, role]);
+  if (role) await client.execute("INSERT INTO staff_account(account_id,role_id,status,mfa_completed_at) VALUES($1,$2,'ACTIVE',now())", [account.id, role]);
   return account;
 }
 async function addCartLine(accountId: string, variantId: string) {
   const cart = await row<{ id: string }>("INSERT INTO cart(account_id) VALUES($1) ON CONFLICT(account_id) DO UPDATE SET updated_at=now() RETURNING id", [accountId]);
-  await database.query("INSERT INTO cart_line(cart_id,variant_id,quantity,selected) VALUES($1,$2,1,true) ON CONFLICT(cart_id,variant_id) DO UPDATE SET quantity=1,selected=true", [cart.id, variantId]);
+  await client.execute("INSERT INTO cart_line(cart_id,variant_id,quantity,selected) VALUES($1,$2,1,true) ON CONFLICT(cart_id,variant_id) DO UPDATE SET quantity=1,selected=true", [cart.id, variantId]);
 }
 
 describe("v0.1 operational journeys", () => {
   beforeAll(async () => {
     process.env.APP_ENV = "test";
     database = new PGlite({ extensions: { pgcrypto } });
-    for (const filename of (await readdir(resolve("db/migrations"))).filter((name) => name.endsWith(".sql")).sort()) await database.exec(await readFile(resolve("db/migrations", filename), "utf8"));
+    await database.waitReady;
+    orm = drizzlePglite({ client: database, schema });
+    client = createDatabaseClient(orm);
+    for (const filename of (await readdir(resolve("db/migrations"))).filter((name) => name.endsWith(".sql")).sort()) await client.executeRaw(await readFile(resolve("db/migrations", filename), "utf8"));
   }, 30_000);
   afterAll(async () => { await database.close(); });
 
@@ -51,11 +61,11 @@ describe("v0.1 operational journeys", () => {
     const terms = await row<{ id: string }>("INSERT INTO terms_document(kind,version,language,title,body,content_hash,published_at) VALUES('TERMS','v0.1','en','Terms','Reviewed launch terms','hash',now()) RETURNING id");
     const zone = await row<{ id: string }>("INSERT INTO delivery_zone(name_en,name_ar,fee_fils,eta_min_days,eta_max_days,policy_reviewed) VALUES('Amman','عمان',3000,1,2,true) RETURNING id");
     const window = await row<{ id: string }>("INSERT INTO delivery_window(zone_id,weekday,starts_at,ends_at,capacity) VALUES($1,0,'09:00','13:00',50) RETURNING id", [zone.id]);
-    await database.query("UPDATE app_setting SET value='\"NONE_REVIEWED\"'::jsonb WHERE key='checkout.tax_policy'");
-    await database.query("UPDATE app_setting SET value='true'::jsonb WHERE key='delivery.cod_redelivery_policy_reviewed'");
+    await client.execute("UPDATE app_setting SET value='\"NONE_REVIEWED\"'::jsonb WHERE key='checkout.tax_policy'");
+    await client.execute("UPDATE app_setting SET value='true'::jsonb WHERE key='delivery.cod_redelivery_policy_reviewed'");
     const product = await row<{ id: string }>("INSERT INTO product(slug,name_en,name_ar,product_type,status,base_price_fils) VALUES('journey-item','Journey item','منتج الرحلة','equipment','ACTIVE',10000) RETURNING id");
     const variant = await row<{ id: string }>("INSERT INTO product_variant(product_id,sku) VALUES($1,'JOURNEY-001') RETURNING id", [product.id]);
-    await database.query("INSERT INTO inventory_balance(variant_id,on_hand,reserved) VALUES($1,10,0)", [variant.id]);
+    await client.execute("INSERT INTO inventory_balance(variant_id,on_hand,reserved) VALUES($1,10,0)", [variant.id]);
     const checkoutInput = (method: "CARD" | "COD", key: string) => ({ paymentMethod: method, fulfillmentMode: "DELIVERY", deliveryZoneId: zone.id, deliveryWindowId: window.id, recipient: { name: "Journey Buyer", phone: "+962790000001", city: "Amman", area: "Abdoun", street: "Test Street" }, termsDocumentId: terms.id, idempotencyKey: key, doorstepAuthorized: method === "CARD" });
 
     await addCartLine(buyer.id, variant.id);
@@ -100,23 +110,23 @@ describe("v0.1 operational journeys", () => {
     expect(retryState.status).toBe("CANCELLED"); expect(Number(retryState.delivery_fils)).toBe(9000);
 
     await requestDeletion(buyer.id);
-    await database.query("UPDATE deletion_manifest SET due_at=now()-interval '1 second' WHERE account_id=$1", [buyer.id]);
-    await database.query("UPDATE account SET deletion_due_at=now()-interval '1 second' WHERE id=$1", [buyer.id]);
+    await client.execute("UPDATE deletion_manifest SET due_at=now()-interval '1 second' WHERE account_id=$1", [buyer.id]);
+    await client.execute("UPDATE account SET deletion_due_at=now()-interval '1 second' WHERE id=$1", [buyer.id]);
     expect((await finalizeDueDeletions()).finalized).toBe(1);
     const deleted = await row<{ status: string; email_normalized: string; display_name: string }>("SELECT status,email_normalized,display_name FROM account WHERE id=$1", [buyer.id]);
     expect(deleted.status).toBe("DELETED"); expect(deleted.email_normalized).toMatch(/^DELETED_USER_[0-9]{6}@deleted\.invalid$/); expect(deleted.display_name).toMatch(/^DELETED_USER_/);
     expect((await row<{ count: number }>("SELECT count(*)::int AS count FROM cash_ledger WHERE order_id=(SELECT id FROM shop_order WHERE public_id=$1)", [cod.orderId])).count).toBeGreaterThan(0);
 
     const ctoSession = await row<{ id: string }>("INSERT INTO account_session(account_id,token_hash,kind,expires_at) VALUES($1,'emergency-token','EMERGENCY',now()+interval '1 hour') RETURNING id", [reviewer.id]);
-    await database.query("INSERT INTO webauthn_credential(id,account_id,public_key,device_label,independent_key,last_used_at) VALUES('journey-key',$1,'\\x01','Independent spare',true,now())", [reviewer.id]);
+    await client.execute("INSERT INTO webauthn_credential(id,account_id,public_key,device_label,independent_key,last_used_at) VALUES('journey-key',$1,'\\x01','Independent spare',true,now())", [reviewer.id]);
     const proof = async (action: string) => { const challenge = await row<{ id: string }>("INSERT INTO webauthn_challenge(account_id,ceremony,challenge,expires_at,consumed_at) VALUES($1,'RECOVERY_ACTION',$2,now()+interval '5 minutes',now()) RETURNING id", [reviewer.id, `challenge-${action}`]); return row<{ id: string }>("INSERT INTO emergency_action_proof(session_id,action,challenge_id,verified_at,expires_at,credential_id) VALUES($1,$2,$3,now(),now()+interval '5 minutes','journey-key') RETURNING id", [ctoSession.id, action, challenge.id]); };
     const emergency: CurrentAccount = { id: reviewer.id, publicId: reviewer.public_id, email: "reviewer@journey.test", displayName: "Journey Reviewer", status: "ACTIVE", emailVerified: true, phoneVerified: true, role: "CTO", sessionId: ctoSession.id, authenticatedAt: new Date(), sessionKind: "EMERGENCY" };
     expect((await activateLockdown(emergency, (await proof("LOCKDOWN")).id)).locked).toBe(true);
     await recordEmergencyFailure(emergency, "invalid-key-removal");
     const passphrase = "one two three four five six seven eight nine ten eleven twelve";
     const verifier = await hash(passphrase, { memoryCost: 19456, timeCost: 2, parallelism: 1 });
-    await database.query("INSERT INTO pending_recovery_secret(account_id,verifier_hash,expires_at) VALUES($1,$2,now()+interval '30 minutes')", [reviewer.id, verifier]);
-    await database.query("INSERT INTO recovery_secret(account_id,verifier_hash,saved_check_at) VALUES($1,$2,now())", [reviewer.id, verifier]);
+    await client.execute("INSERT INTO pending_recovery_secret(account_id,verifier_hash,expires_at) VALUES($1,$2,now()+interval '30 minutes')", [reviewer.id, verifier]);
+    await client.execute("INSERT INTO recovery_secret(account_id,verifier_hash,saved_check_at) VALUES($1,$2,now())", [reviewer.id, verifier]);
     const finished = await finishEmergencyRecovery(emergency, { password: "a-new-secure-password", confirmation: passphrase, savedCopyAcknowledged: true, repairChecklistAcknowledged: true, proofId: (await proof("COMPLETE_RECOVERY")).id });
     expect(finished).toMatchObject({ completed: true, normalLoginRequired: true });
     expect((await row<{ normal_operations_locked: boolean }>("SELECT normal_operations_locked FROM platform_state WHERE singleton=true")).normal_operations_locked).toBe(false);

@@ -34,7 +34,7 @@ export const settingUpdateSchema = z.discriminatedUnion("key", [
 
 export async function readSetting(key: SettingKey): Promise<SettingValue> {
   return withDatabaseClient(async (client) => {
-    const result = await client.query<{ value: unknown }>("SELECT value FROM app_setting WHERE key = $1", [key]);
+    const result = await client.execute<{ value: unknown }>("SELECT value FROM app_setting WHERE key = $1", [key]);
     if (!result.rows[0]) throw new Error("SETTING_NOT_FOUND");
     return definitions[key].parse(result.rows[0].value);
   });
@@ -44,19 +44,19 @@ export async function updateSetting(input: SettingUpdate): Promise<void> {
   const value = definitions[input.key].parse(input.value);
   await withTransaction(async (client) => {
     if(input.key==="platform.store_enabled"&&input.value===true){const blockers=await launchBlockers(client);if(blockers.length)throw new Error(`STOREFRONT_ACTIVATION_BLOCKED:${blockers.join(",")}`);}
-    const current = await client.query<{ value: unknown; version: number }>(
+    const current = await client.execute<{ value: unknown; version: number }>(
       "SELECT value, version FROM app_setting WHERE key = $1 FOR UPDATE",
       [input.key],
     );
     if (!current.rows[0]) throw new Error("SETTING_NOT_FOUND");
 
     const nextVersion = current.rows[0].version + 1;
-    await client.query("UPDATE app_setting SET value = $2::jsonb, version = $3, updated_at = now() WHERE key = $1", [
+    await client.execute("UPDATE app_setting SET value = $2::jsonb, version = $3, updated_at = now() WHERE key = $1", [
       input.key,
       JSON.stringify(value),
       nextVersion,
     ]);
-    await client.query(
+    await client.execute(
       `INSERT INTO setting_change
        (setting_key, old_value, new_value, version, actor_id, reason)
        VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6)`,

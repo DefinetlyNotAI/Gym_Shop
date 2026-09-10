@@ -21,7 +21,7 @@ export function requireCustomerPortal(account:CurrentAccount|null):CurrentAccoun
 export async function requirePermission(account: CurrentAccount | null, permission: string): Promise<CurrentAccount> {
   if (!account) throw new Error("AUTH_REQUIRED");
   if (account.sessionKind !== "NORMAL") throw new Error("EMERGENCY_SESSION_RESTRICTED");
-  const result = await withDatabaseClient((client) => client.query<{sensitive:boolean}>(
+  const result = await withDatabaseClient((client) => client.execute<{sensitive:boolean}>(
     `SELECT permission.sensitive FROM staff_account AS staff
      JOIN role_permission AS grant_row ON grant_row.role_id = staff.role_id
      JOIN permission ON permission.id=grant_row.permission_id

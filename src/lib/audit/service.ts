@@ -1,7 +1,7 @@
-import type { PoolClient } from "@neondatabase/serverless";
+import type { DatabaseClient } from "@/lib/db/client";
 
 export async function appendAudit(
-  client: PoolClient,
+  client: DatabaseClient,
   input: {
     actorId?: string;
     actorRole?: string;
@@ -17,7 +17,7 @@ export async function appendAudit(
     requestContext?: Record<string, unknown>;
   },
 ): Promise<void> {
-  await client.query(
+  await client.execute(
     `INSERT INTO audit_event
       (actor_id, actor_role, action, target_type, target_id, domain, before_value,
        after_value, reason, result, sensitive, request_context)

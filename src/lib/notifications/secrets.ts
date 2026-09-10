@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import type { PoolClient } from "@neondatabase/serverless";
+import type { DatabaseClient } from "@/lib/db/client";
 import { getRuntimeConfig } from "@/lib/config/env";
 
 type SecretPayload = {
@@ -46,12 +46,12 @@ export function decryptOutboundSecret(envelope: string): SecretPayload {
 }
 
 export async function storeOutboundSecret(
-  client: PoolClient,
+  client: DatabaseClient,
   eventId: string,
   payload: SecretPayload,
   expiresAt: Date,
 ): Promise<void> {
-  await client.query(
+  await client.execute(
     "INSERT INTO outbound_secret(event_id,ciphertext,expires_at) VALUES($1,$2,$3)",
     [eventId, encryptOutboundSecret(payload), expiresAt],
   );

@@ -11,13 +11,13 @@ export async function POST(request: Request) {
     const provider = "AMAZON_PAYMENT_SERVICES";
     const payloadHash = createHash("sha256").update(rawBody, "utf8").digest("hex");
     const recorded = await withDatabaseClient(async (client) => {
-      const inserted = await client.query(
+      const inserted = await client.execute(
         `INSERT INTO payment_provider_event(provider,provider_event_id,provider_reference,event_type,payload_hash)
          VALUES($1,$2,$3,$4,$5) ON CONFLICT(provider,provider_event_id) DO NOTHING`,
         [provider, event.eventId, event.reference, event.eventType, payloadHash],
       );
       if (inserted.rowCount) return "NEW" as const;
-      const prior = await client.query<{ provider_reference: string; payload_hash: string; processed_at: Date | null }>(
+      const prior = await client.execute<{ provider_reference: string; payload_hash: string; processed_at: Date | null }>(
         "SELECT provider_reference,payload_hash,processed_at FROM payment_provider_event WHERE provider=$1 AND provider_event_id=$2",
         [provider, event.eventId],
       );
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     });
     if (recorded === "PROCESSED") return apiSuccess({ accepted: true, replayed: true });
     const outcome = await applyCardPaymentStatus(event);
-    await withDatabaseClient((client) => client.query(
+    await withDatabaseClient((client) => client.execute(
       "UPDATE payment_provider_event SET processed_at=now(),outcome=$3 WHERE provider=$1 AND provider_event_id=$2 AND processed_at IS NULL",
       [provider, event.eventId, JSON.stringify(outcome)],
     ).then(() => undefined));
