@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  allowedDevOrigins: ["100.82.154.71"],
   async headers() {
     return [
       {
