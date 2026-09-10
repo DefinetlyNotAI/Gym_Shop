@@ -8,10 +8,10 @@ import { mergeAnonymousCart } from "@/lib/commerce/cart";
 
 export async function POST(request: Request) {
   try {
-    requireTrustedMutation(request);
+    const surface = requireTrustedMutation(request);
     const { email, password } = await request.json();
     await checkRateLimit("login",requestRateKey(request,String(email)),10,900);
-    const result = await authenticate(email, password);
+    const result = await authenticate(email, password, surface === "ADMIN" ? "STAFF" : "CUSTOMER");
     if(result.mfaRequired)return apiSuccess(result);
     const anonymousCart=await readAnonymousCartToken();
     const merge=anonymousCart?await mergeAnonymousCart(result.accountId,anonymousCart):{merged:0,selectionConfirmationRequired:false};

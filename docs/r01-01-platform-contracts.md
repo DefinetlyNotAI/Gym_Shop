@@ -8,6 +8,19 @@ Gym Shop is three independently buildable Next.js applications:
 
 The two user interfaces call `/api/v1/*` through same-origin rewrites to the configured API origin. This preserves host-only, HttpOnly session cookies without exposing API credentials or importing backend modules into either UI. Production DNS must route each hostname to its matching application and redirect `www.example.com` to `example.com`.
 
+## Browser and network boundary
+
+- The API deliberately sends no cross-origin resource-sharing headers. Browsers communicate with it through the storefront or admin application's same-origin `/api/v1/*` rewrite.
+- Every browser mutation must pass a route-specific origin policy. Customer routes accept only `STOREFRONT_ORIGIN`, staff and recovery routes accept only `ADMIN_ORIGIN`, the small explicitly shared route set accepts either, and an unclassified mutation is rejected.
+- Cross-site Fetch Metadata requests are rejected before route handling. The only browser exception is the signed Amazon Payment Services return endpoint; provider webhooks and media scan callbacks use their own signatures/secrets.
+- Storefront and admin responses use per-request nonce CSPs. External connections/images are limited to the exact configured R2 endpoint/public origin; storefront form submission additionally allows only the selected APS Hosted Checkout origin.
+- Staff authentication, MFA, recovery, and WebAuthn ceremonies are restricted to the admin surface and `ADMIN_ORIGIN`. Customer and staff role families cannot create sessions on the wrong surface.
+- Production session and cart cookies use the `__Host-` prefix, `Secure`, `HttpOnly` where applicable, `SameSite=Lax` (or `Strict` for recovery), high priority, and no `Domain` attribute.
+- Application origins must be distinct exact HTTPS origins outside local/test. The WebAuthn RP ID must cover the admin host; PostgreSQL URLs must require TLS; provider, CAPTCHA, and R2 origins must be exact HTTPS origins without embedded credentials.
+
+The storefront and admin deployment environments need the public `API_ORIGIN`, `R2_ENDPOINT`, and `R2_PUBLIC_BASE_URL` values so rewrites and CSP allowlists match the API configuration. Secret R2 credentials remain API-only.
+The R2 bucket CORS policy must allow only the exact storefront and admin origins, only the required `PUT` method for direct uploads, and only the signed `content-type` and `x-amz-checksum-sha256` request headers. Signed URLs use path-style addressing so the browser stays on the single CSP-allowlisted `R2_ENDPOINT` host.
+
 ## Local simulation
 
 `npm run simmode` starts all three applications on ports 3000, 3001, and 3002. It overrides inherited provider/database credentials, creates an in-memory PGlite database, applies every migration, loads deterministic fixtures, simulates Amazon Payment Services, and captures email/WhatsApp work in the in-memory notification records. No `.env` file or external account is used. The simulation banner and role switchers identify the environment, and all state disappears when the process stops.
@@ -44,6 +57,7 @@ Messaging supports in-site, email, and WhatsApp only. WhatsApp is the only phone
 The database starts with no initialized CTO and the storefront disabled. Normal traffic remains in maintenance until CTO password/MFA/recovery setup, bilingual terms, reviewed tax treatment, a reviewed delivery window or pickup, COD policy review, and explicit activation are complete. Preview/production configuration additionally requires:
 
 - isolated Neon, APS sandbox/production, R2, messaging, CAPTCHA, and origin configuration;
+- edge/reverse-proxy TLS, request-size limits, rate limiting, and firewall rules that expose only the three intended application hosts;
 - scoped runtime/migration/recovery credentials and a tested backup/deletion replay procedure;
 - an authenticated scheduler with monitoring for outbox lag, dead events, unknown payments, and cash discrepancies;
 - approved APS merchant credentials, response phrases, return/webhook registration, and sandbox evidence;

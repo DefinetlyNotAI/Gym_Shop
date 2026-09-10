@@ -109,7 +109,7 @@ export async function completeRecoveryAssertion(id:string,binding:string,respons
     const challenge=await client.execute<{id:string;challenge:string}>("SELECT id,challenge FROM webauthn_challenge WHERE account_id=$1 AND ceremony='AUTHENTICATION' AND consumed_at IS NULL AND expires_at>now() ORDER BY created_at DESC LIMIT 1 FOR UPDATE",[tx.account_id]);
     if(!challenge.rows[0])throw new Error("RECOVERY_PROOF_INVALID");
     const transports=z.array(z.enum(["ble","hybrid","internal","nfc","usb"])).parse(credential.transports);
-    const result=await verifyAuthenticationResponse({response,expectedChallenge:challenge.rows[0].challenge,expectedOrigin:[config.STOREFRONT_ORIGIN,config.ADMIN_ORIGIN],expectedRPID:config.WEBAUTHN_RP_ID,credential:{id:credential.id,publicKey:Uint8Array.from(credential.public_key),counter:credential.counter,transports},requireUserVerification:true});
+    const result=await verifyAuthenticationResponse({response,expectedChallenge:challenge.rows[0].challenge,expectedOrigin:config.ADMIN_ORIGIN,expectedRPID:config.WEBAUTHN_RP_ID,credential:{id:credential.id,publicKey:Uint8Array.from(credential.public_key),counter:credential.counter,transports},requireUserVerification:true});
     if(!result.verified)throw new Error("RECOVERY_PROOF_INVALID");
     const sessionToken=randomToken();
     await client.execute("UPDATE webauthn_credential SET counter=$2,last_used_at=now() WHERE id=$1",[credential.id,result.authenticationInfo.newCounter]);

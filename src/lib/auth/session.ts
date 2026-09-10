@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { randomToken, hashToken } from "@/lib/security/crypto";
 import { withDatabaseClient, withTransaction } from "@/lib/db/client";
 
-const COOKIE_NAME = "gym_shop_session";
+const COOKIE_NAME = process.env.NODE_ENV === "production" ? "__Host-gym_shop_session" : "gym_shop_session";
 const CUSTOMER_SESSION_SECONDS = 60 * 60 * 24 * 14;
 
 export type CurrentAccount = {
@@ -30,14 +30,15 @@ export async function createSession(accountId: string, metadata?: { userAgent?: 
   return token;
 }
 
-export async function setSessionCookie(token: string): Promise<void> {
+export async function setSessionCookie(token: string, options: { maxAge?: number; sameSite?: "lax" | "strict" } = {}): Promise<void> {
   const jar = await cookies();
   jar.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: options.sameSite ?? "lax",
     path: "/",
-    maxAge: CUSTOMER_SESSION_SECONDS,
+    maxAge: options.maxAge ?? CUSTOMER_SESSION_SECONDS,
+    priority: "high",
   });
 }
 

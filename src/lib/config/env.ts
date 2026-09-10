@@ -38,8 +38,31 @@ export type RuntimeConfig = z.infer<typeof runtimeSchema>;
 
 let cachedConfig: RuntimeConfig | undefined;
 
+function exactOrigin(name: string, value: string): URL {
+  const url = new URL(value);
+  if (url.origin !== value || url.username || url.password) throw new Error(`${name} must be an exact origin without credentials or a path`);
+  return url;
+}
+
+function requireHttps(name: string, value: string | undefined, originOnly = false): void {
+  if (!value) return;
+  const url = new URL(value);
+  if (url.protocol !== "https:") throw new Error(`${name} must use HTTPS outside local development`);
+  if (url.username || url.password || url.hash) throw new Error(`${name} cannot contain credentials or a fragment`);
+  if (originOnly && url.origin !== value) throw new Error(`${name} must be an exact HTTPS origin`);
+}
+
+function rpIdMatches(origin: URL, rpId: string): boolean {
+  return origin.hostname === rpId || origin.hostname.endsWith(`.${rpId}`);
+}
+
 export function parseRuntimeConfig(environment: Record<string, string | undefined>): RuntimeConfig {
   const config = runtimeSchema.parse(environment);
+  const storefront = exactOrigin("STOREFRONT_ORIGIN", config.STOREFRONT_ORIGIN);
+  const admin = exactOrigin("ADMIN_ORIGIN", config.ADMIN_ORIGIN);
+  const api = exactOrigin("API_ORIGIN", config.API_ORIGIN);
+  if (new Set([storefront.origin, admin.origin, api.origin]).size !== 3) throw new Error("Application origins must be distinct");
+  if (!rpIdMatches(admin, config.WEBAUTHN_RP_ID)) throw new Error("WEBAUTHN_RP_ID must cover the admin host");
   if (config.SIM_MODE && !["local", "test"].includes(config.APP_ENV)) throw new Error("SIM_MODE is restricted to local and test environments");
   if(config.SIM_MODE&&[
     "DATABASE_URL","APS_ACCESS_CODE","APS_MERCHANT_IDENTIFIER","APS_SHA_REQUEST_PHRASE","APS_SHA_RESPONSE_PHRASE",
@@ -74,7 +97,15 @@ export function parseRuntimeConfig(environment: Record<string, string | undefine
     if (missing.length > 0) {
       throw new Error(`Missing required ${config.APP_ENV} configuration: ${missing.join(", ")}`);
     }
-    if([config.STOREFRONT_ORIGIN,config.ADMIN_ORIGIN,config.API_ORIGIN].some(origin=>new URL(origin).hostname.includes("localhost")))throw new Error(`${config.APP_ENV} origins cannot use localhost`);
+    if ([storefront, admin, api].some((origin) => origin.hostname.includes("localhost") || origin.protocol !== "https:")) throw new Error(`${config.APP_ENV} origins must use non-local HTTPS hosts`);
+    if (new Set([storefront.hostname, admin.hostname, api.hostname]).size !== 3) throw new Error(`${config.APP_ENV} applications require separate hostnames`);
+    requireHttps("NOTIFICATION_PROVIDER_API_URL", config.NOTIFICATION_PROVIDER_API_URL, true);
+    requireHttps("CAPTCHA_VERIFY_URL", config.CAPTCHA_VERIFY_URL);
+    requireHttps("R2_ENDPOINT", config.R2_ENDPOINT, true);
+    requireHttps("R2_PUBLIC_BASE_URL", config.R2_PUBLIC_BASE_URL, true);
+    const databaseUrl = new URL(config.DATABASE_URL!);
+    if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol) || databaseUrl.searchParams.get("sslmode") !== "require") throw new Error("DATABASE_URL must be PostgreSQL with sslmode=require");
+    if (!config.OUTBOUND_SECRET_KEY || !/^[A-Za-z0-9_-]{43}$/.test(config.OUTBOUND_SECRET_KEY) || Buffer.from(config.OUTBOUND_SECRET_KEY, "base64url").length !== 32) throw new Error("OUTBOUND_SECRET_KEY must be an unpadded base64url encoding of exactly 32 random bytes");
     if (config.APP_ENV === "production" && config.APS_ENVIRONMENT !== "production") throw new Error("Production requires APS_ENVIRONMENT=production");
   }
   return config;
