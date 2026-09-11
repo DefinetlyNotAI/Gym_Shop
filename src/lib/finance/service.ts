@@ -1,8 +1,38 @@
 import { appendAudit } from "@/lib/audit/service";
-import { withDatabaseClient, withTransaction } from "@/lib/db/client";
+import { withDatabaseClient, withTransaction, type DatabaseClient } from "@/lib/db/client";
 import { executeProviderRefund } from "@/lib/payments/provider";
 import { releaseWalletHold } from "@/lib/wallet/service";
 import { reverseReferralReward } from "@/lib/referrals/service";
+
+export async function getFinanceOverview(client: DatabaseClient) {
+  const [refunds, cash] = await Promise.all([
+    client.execute(
+      `SELECT refund.id,refund.amount_fils,refund.reason,refund.status,refund.provider_reference,
+              orders.public_id AS order_public_id,payment.method,payment.provider
+       FROM refund
+       LEFT JOIN shop_order AS orders ON orders.id=refund.order_id
+       LEFT JOIN payment ON payment.id=refund.payment_id
+       ORDER BY refund.created_at DESC LIMIT 100`,
+    ),
+    client.execute(
+      `SELECT ledger.id,ledger.driver_id,account.display_name AS driver_name,ledger.kind,
+              ledger.amount_fils,ledger.state,ledger.source_id,ledger.reason,
+              ledger.occurred_at AS created_at
+       FROM cash_ledger AS ledger
+       LEFT JOIN account ON account.id=ledger.driver_id
+       ORDER BY ledger.occurred_at DESC LIMIT 200`,
+    ),
+  ]);
+  return {
+    refunds: refunds.rows,
+    cash: cash.rows,
+    reconciliationDefinitions: {
+      driverHeld: "Cash collected by a driver remains custody, not merchant deposited cash.",
+      deposited: "Only independently verified deposits are merchant bank cash.",
+      wallet: "Wallet ledger movement is not new revenue.",
+    },
+  };
+}
 
 export async function driverCashPosition(driverId:string){return withDatabaseClient(async client=>{const result=await client.execute<{held:string;pending:string}>("SELECT COALESCE(SUM(CASE WHEN kind='COLLECTION' THEN amount_fils WHEN kind='FINANCE_VERIFICATION' THEN -amount_fils ELSE 0 END),0) AS held,COALESCE(SUM(CASE WHEN kind='HANDOVER' THEN amount_fils WHEN kind='FINANCE_VERIFICATION' THEN -amount_fils ELSE 0 END),0) AS pending FROM cash_ledger WHERE driver_id=$1",[driverId]);return{heldFils:Number(result.rows[0].held),pendingHandoverFils:Number(result.rows[0].pending)};});}
 

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:acceptance": "node scripts/verify-v01.mjs",
+    "test:acceptance:v02": "node scripts/verify-v02.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "db:verify": "node scripts/verify-migrations.mjs",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",

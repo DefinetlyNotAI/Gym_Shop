@@ -59,6 +59,8 @@ import { adjustInventory } from "@/lib/inventory/operations";
 import { createCampaign as createNotificationCampaign, dispatchDueCampaigns, scheduleCampaign } from "@/lib/notifications/campaigns";
 import { subscribeNewsletter, subscribeRestock, unsubscribeNewsletter } from "@/lib/notifications/subscriptions";
 import { getOperationalDashboard } from "@/lib/analytics/service";
+import { getFinanceOverview } from "@/lib/finance/service";
+import { v02ReleaseReadiness } from "@/lib/platform/release-readiness";
 import {
   awardDeliveryPoints,
   captureWalletHold,
@@ -393,6 +395,13 @@ describe("v0.2 release journeys", () => {
     const dashboard = await getOperationalDashboard({id:account.rows[0].id,publicId:"staff",email:"finance@v02.test",displayName:"Finance",status:"ACTIVE",emailVerified:true,phoneVerified:true,role:"FINANCE_STAFF",sessionId:"session",authenticatedAt:new Date(),sessionKind:"NORMAL"},{from:"2035-01-01",to:"2035-02-01"});
     expect(dashboard.data.commerce).toEqual({revenueFils:35000,orders:1,aovFils:35000,units:2,pendingOrders:0});
     expect(dashboard.metadata.revenue).toContain("wallet ledger transfers are excluded");
+    expect(await v02ReleaseReadiness(client)).toEqual({ softwareReady:true, missingSoftwareEvidence:[], businessCliqProvider:false, activationReady:false, blockers:["BUSINESS_CLIQ_PROVIDER_UNAVAILABLE"] });
+  });
+
+  it("loads the Finance overview from the canonical cash-ledger timestamp", async () => {
+    const overview = await getFinanceOverview(client);
+    expect(overview.reconciliationDefinitions.wallet).toContain("not new revenue");
+    expect(overview.cash).toBeInstanceOf(Array);
   });
 
   it("holds oldest wallet lots once and restores the original provenance after capture", async () => {

@@ -21,3 +21,24 @@ export async function launchBlockers(client: DatabaseClient): Promise<string[]> 
   }
   return blockers;
 }
+
+const V02_TABLES = ["campaign", "wallet_lot", "referral_reward", "product_review", "verification_application", "wallet_payout", "marketing_subscription", "notification_campaign"];
+
+export async function v02ReleaseReadiness(client: DatabaseClient) {
+  const tables = await client.execute<{ table_name: string }>(
+    "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=ANY($1::text[])",
+    [V02_TABLES],
+  );
+  const found = new Set(tables.rows.map((entry) => entry.table_name));
+  const missingSoftwareEvidence = V02_TABLES.filter((table) => !found.has(table));
+  const provider = await client.execute<{ value: unknown }>("SELECT value FROM app_setting WHERE key='payout.provider'");
+  const businessCliqProvider = provider.rows[0]?.value === "ACTIVE";
+  const softwareReady = missingSoftwareEvidence.length === 0;
+  return {
+    softwareReady,
+    missingSoftwareEvidence,
+    businessCliqProvider,
+    activationReady: softwareReady && businessCliqProvider,
+    blockers: businessCliqProvider ? [] : ["BUSINESS_CLIQ_PROVIDER_UNAVAILABLE"],
+  };
+}
