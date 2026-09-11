@@ -36,11 +36,22 @@ type CheckoutResult = {
   paymentFields?: Record<string, string>;
 };
 
+type PricingPreview = {
+  merchandiseFils: number;
+  discountFils: number;
+  deliveryFils: number;
+  taxFils: number;
+  totalFils: number;
+  rejections: { ruleId: string; code: string }[];
+};
+
 export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zones: Zone[]; pickups: Pickup[]; termsId: string; simulation?:boolean }) {
   const [mode, setMode] = useState<"DELIVERY" | "PICKUP">(zones.length ? "DELIVERY" : "PICKUP");
   const [zoneId, setZoneId] = useState(zones[0]?.id ?? "");
   const [paymentMethod, setPaymentMethod] = useState<"CARD" | "COD">("CARD");
   const [simulationOutcome,setSimulationOutcome]=useState<"success"|"failure"|"pending">("success");
+  const [couponCode,setCouponCode]=useState("");
+  const [pricingPreview,setPricingPreview]=useState<PricingPreview|null>(null);
   const [message, setMessage] = useState("");
   const selectedZone = useMemo(() => zones.find((zone) => zone.id === zoneId), [zoneId, zones]);
 
@@ -64,6 +75,7 @@ export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zo
       termsDocumentId: termsId,
       idempotencyKey: crypto.randomUUID(),
       doorstepAuthorized: mode === "DELIVERY" && form.get("doorstep") === "on",
+      couponCode: couponCode.trim() || undefined,
     };
     const response = await fetch("/api/v1/checkout", {
       method: "POST",
@@ -83,6 +95,24 @@ export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zo
       return;
     }
     setMessage(`Order ${result.orderId} confirmed. The pickup PIN is sent through WhatsApp when required. / تم تأكيد الطلب وسيصل رمز الاستلام عبر واتساب عند الحاجة.`);
+  }
+
+  async function previewCoupon() {
+    if (mode !== "DELIVERY" || !zoneId) {
+      setMessage("Select a delivery zone to preview pricing. / اختر منطقة توصيل لمعاينة السعر.");
+      return;
+    }
+    const parameters = new URLSearchParams({ zoneId });
+    if (couponCode.trim()) parameters.set("couponCode", couponCode.trim());
+    const response = await fetch(`/api/v1/checkout/quote?${parameters}`, { headers: { accept: "application/json" } });
+    const payload = await response.json();
+    if (!response.ok) {
+      setPricingPreview(null);
+      setMessage(payload.error?.message ?? "Pricing preview failed. / تعذرت معاينة السعر.");
+      return;
+    }
+    setPricingPreview(payload.data as PricingPreview);
+    setMessage("Pricing refreshed from the checkout engine. / تم تحديث السعر من محرك الدفع.");
   }
 
   return (
@@ -128,6 +158,11 @@ export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zo
           <label>Building / المبنى<input name="building" /></label>
         </div>
         <label>Notes / ملاحظات<textarea name="notes" maxLength={500} /></label>
+        <div className="form-grid">
+          <label>Coupon code / رمز القسيمة<input name="couponCode" value={couponCode} onChange={(event)=>{setCouponCode(event.target.value);setPricingPreview(null);}} minLength={3} maxLength={64}/></label>
+          <button className="secondary" type="button" onClick={previewCoupon} disabled={mode!=="DELIVERY"}>Preview price / معاينة السعر</button>
+        </div>
+        {pricingPreview?<article className="notice"><strong>Authoritative quote / السعر المعتمد</strong><p>Merchandise {(pricingPreview.merchandiseFils/1000).toFixed(3)} JOD · discounts {(pricingPreview.discountFils/1000).toFixed(3)} JOD · delivery {(pricingPreview.deliveryFils/1000).toFixed(3)} JOD · tax {(pricingPreview.taxFils/1000).toFixed(3)} JOD</p><p><strong>Total {(pricingPreview.totalFils/1000).toFixed(3)} JOD</strong></p>{pricingPreview.rejections.length?<small>{pricingPreview.rejections.map((rejection)=>rejection.code).join(" · ")}</small>:null}</article>:null}
         <label>
           Payment / الدفع
           <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as "CARD" | "COD")}>
