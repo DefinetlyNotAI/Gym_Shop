@@ -58,6 +58,7 @@ import { getPayoutAvailability, requestPayout } from "@/lib/payouts/service";
 import { adjustInventory } from "@/lib/inventory/operations";
 import { createCampaign as createNotificationCampaign, dispatchDueCampaigns, scheduleCampaign } from "@/lib/notifications/campaigns";
 import { subscribeNewsletter, subscribeRestock, unsubscribeNewsletter } from "@/lib/notifications/subscriptions";
+import { getOperationalDashboard } from "@/lib/analytics/service";
 import {
   awardDeliveryPoints,
   captureWalletHold,
@@ -377,6 +378,21 @@ describe("v0.2 release journeys", () => {
     await unsubscribeNewsletter(account.rows[0].id);
     const state = await client.execute<{subscription:string;consent:boolean;recipients:number}>("SELECT (SELECT status FROM marketing_subscription WHERE account_id=$1) AS subscription,(SELECT granted FROM consent_event WHERE account_id=$1 AND purpose='MARKETING_EMAIL' ORDER BY occurred_at DESC LIMIT 1) AS consent,(SELECT count(*)::int FROM campaign_recipient WHERE account_id=$1 AND status='QUEUED') AS recipients",[account.rows[0].id]);
     expect(state.rows[0]).toMatchObject({subscription:"UNSUBSCRIBED",consent:false,recipients:1});
+  });
+
+  it("reconciles completed order snapshots without treating wallet movement as revenue", async () => {
+    const account = await client.execute<{ id: string }>("INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('analytics@v02.test','hash','Analytics Buyer','ACTIVE') RETURNING id");
+    const terms = await client.execute<{ id: string }>("INSERT INTO terms_document(kind,version,language,title,body,content_hash,published_at) VALUES('TERMS','analytics-v02','en','Analytics terms','Terms','analytics-v02',now()) RETURNING id");
+    const product = await client.execute<{ id: string }>("INSERT INTO product(slug,name_en,name_ar,product_type,status,base_price_fils) VALUES('analytics-product','Analytics Product','منتج','Equipment','ACTIVE',40000) RETURNING id");
+    const variant = await client.execute<{ id: string }>("INSERT INTO product_variant(product_id,sku,option_values) VALUES($1,'ANALYTICS-SKU','{}') RETURNING id",[product.rows[0].id]);
+    const order = await client.execute<{ id: string }>(`INSERT INTO shop_order(account_id,status,payment_status,fulfillment_status,payment_method,merchandise_fils,discount_fils,delivery_fils,wallet_tender_fils,external_due_fils,collected_fils,quote_snapshot,recipient_snapshot,delivery_snapshot,terms_document_id,created_at)
+      VALUES($1,'COMPLETED','PAID','DELIVERED','CARD',40000,5000,0,5000,30000,30000,'{}','{}','{}',$2,'2035-01-10T12:00:00Z') RETURNING id`,[account.rows[0].id,terms.rows[0].id]);
+    await client.execute("INSERT INTO order_line(order_id,product_id,variant_id,sku,name_snapshot,options_snapshot,quantity,unit_base_fils,unit_net_fils,line_base_fils,line_net_fils) VALUES($1,$2,$3,'ANALYTICS-SKU','{\"en\":\"Analytics Product\",\"ar\":\"منتج\"}','{}',2,20000,17500,40000,35000)",[order.rows[0].id,product.rows[0].id,variant.rows[0].id]);
+    await client.execute(`INSERT INTO wallet_lot(account_id,source_type,source_id,original_fils,available_fils) VALUES($1,'ANALYTICS','movement',999000,999000)`,[account.rows[0].id]);
+    await client.execute(`INSERT INTO wallet_ledger(account_id,direction,kind,amount_fils,source_type,source_id,operation_key,created_at) VALUES($1,'CREDIT','CREDIT',999000,'ANALYTICS','movement','analytics-wallet-movement','2035-01-10T12:00:00Z')`,[account.rows[0].id]);
+    const dashboard = await getOperationalDashboard({id:account.rows[0].id,publicId:"staff",email:"finance@v02.test",displayName:"Finance",status:"ACTIVE",emailVerified:true,phoneVerified:true,role:"FINANCE_STAFF",sessionId:"session",authenticatedAt:new Date(),sessionKind:"NORMAL"},{from:"2035-01-01",to:"2035-02-01"});
+    expect(dashboard.data.commerce).toEqual({revenueFils:35000,orders:1,aovFils:35000,units:2,pendingOrders:0});
+    expect(dashboard.metadata.revenue).toContain("wallet ledger transfers are excluded");
   });
 
   it("holds oldest wallet lots once and restores the original provenance after capture", async () => {

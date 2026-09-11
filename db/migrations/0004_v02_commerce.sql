@@ -503,7 +503,8 @@ VALUES ('promotions.manage','promotions','manage',false),
        ('referrals.manage','referrals','manage',true),
        ('reviews.moderate','reviews','moderate',true),
        ('verification.review','verification','review',true),
-       ('payouts.review','payouts','review',true);
+       ('payouts.review','payouts','review',true),
+       ('analytics.read','analytics','read',false);
 
 INSERT INTO role_permission(role_id,permission_id)
 VALUES ('ADMIN','promotions.manage'),('SUPER_ADMIN','promotions.manage'),('CTO','promotions.manage'),
@@ -513,6 +514,9 @@ VALUES ('SUPPORT_AGENT','reviews.moderate'),('ADMIN','reviews.moderate'),('SUPER
 INSERT INTO role_permission(role_id,permission_id)
 VALUES ('ADMIN','verification.review'),('SUPER_ADMIN','verification.review'),('CTO','verification.review'),
        ('FINANCE_STAFF','payouts.review'),('SUPER_ADMIN','payouts.review'),('CTO','payouts.review');
+INSERT INTO role_permission(role_id,permission_id)
+VALUES ('DELIVERY_AGENT','analytics.read'),('LOGISTICS_STAFF','analytics.read'),('FINANCE_STAFF','analytics.read'),
+       ('SUPPORT_AGENT','analytics.read'),('ADMIN','analytics.read'),('SUPER_ADMIN','analytics.read'),('CTO','analytics.read');
 
 INSERT INTO schema_migration(name) VALUES ('0004_v02_commerce.sql');
 
