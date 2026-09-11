@@ -20,7 +20,7 @@ vi.mock("@/lib/db/client", async (importOriginal) => {
   };
 });
 
-import { checkout, quoteSelectedCart } from "@/lib/commerce/orders";
+import { cancelOrder, checkout, quoteSelectedCart } from "@/lib/commerce/orders";
 import { createDatabaseClient } from "@/lib/db/client";
 import {
   createCampaign,
@@ -30,6 +30,15 @@ import {
   updatePromotionRule,
 } from "@/lib/pricing/admin";
 import { loadPricingRulesForQuote } from "@/lib/pricing/service";
+import {
+  awardDeliveryPoints,
+  captureWalletHold,
+  convertPoints,
+  creditWalletLot,
+  getWalletSummary,
+  holdWalletTender,
+  releaseWalletHold,
+} from "@/lib/wallet/service";
 
 async function tableNames(names: string[]) {
   const result = await client.execute<{ table_name: string }>(
@@ -61,15 +70,165 @@ describe("v0.2 release journeys", () => {
       "account_group",
       "account_group_member",
       "campaign",
+      "point_conversion",
+      "point_ledger",
       "promotion_code",
       "promotion_rule",
       "promotion_scope",
       "promotion_usage",
+      "wallet_hold",
+      "wallet_hold_allocation",
+      "wallet_ledger",
+      "wallet_lot",
     ];
 
     expect(await tableNames(requiredTables)).toEqual(requiredTables);
     const permission = await client.execute<{ id: string }>("SELECT id FROM permission WHERE id='promotions.manage'");
     expect(permission.rows).toEqual([{ id: "promotions.manage" }]);
+  });
+
+  it("converts only whole point blocks under the Amman weekly quota and replays safely", async () => {
+    const account = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('wallet-conversion@v02.test','hash','Wallet Buyer','ACTIVE') RETURNING id",
+    );
+    await client.execute(
+      `INSERT INTO point_ledger(account_id,direction,kind,milli_points,source_type,source_id,operation_key)
+       VALUES($1,'CREDIT','CREDIT',250000,'TEST','opening-points','test:wallet-opening')`,
+      [account.rows[0].id],
+    );
+
+    const converted = await convertPoints(account.rows[0].id, { blocks: 2, idempotencyKey: "convert-wallet-2-blocks" });
+    const replayed = await convertPoints(account.rows[0].id, { blocks: 2, idempotencyKey: "convert-wallet-2-blocks" });
+    const summary = await getWalletSummary(account.rows[0].id);
+
+    expect(replayed).toEqual(converted);
+    expect(converted).toMatchObject({ blocks: 2, pointsDebited: 200, walletFilsCredited: 2_000, weeklyBlocksRemaining: 3 });
+    expect(summary).toMatchObject({ pointMilliBalance: 50_000, walletAvailableFils: 2_000, expires: false });
+    await expect(convertPoints(account.rows[0].id, {
+      blocks: 4,
+      idempotencyKey: "convert-wallet-over-weekly-quota",
+    })).rejects.toThrow("POINT_CONVERSION_WEEKLY_LIMIT");
+    expect(await getWalletSummary(account.rows[0].id)).toMatchObject({
+      pointMilliBalance: 50_000,
+      walletAvailableFils: 2_000,
+    });
+  });
+
+  it("holds oldest wallet lots once and restores the original provenance after capture", async () => {
+    const account = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('wallet-hold@v02.test','hash','Wallet Hold Buyer','ACTIVE') RETURNING id",
+    );
+    const terms = await client.execute<{ id: string }>(
+      "INSERT INTO terms_document(kind,version,language,title,body,content_hash,published_at) VALUES('TERMS','wallet-v0.2','en','Wallet terms','Wallet terms','wallet-v02',now()) RETURNING id",
+    );
+    const makeOrder = async (suffix: string) => (await client.execute<{ id: string }>(
+      `INSERT INTO shop_order(account_id,status,payment_status,fulfillment_status,payment_method,merchandise_fils,delivery_fils,external_due_fils,quote_snapshot,recipient_snapshot,delivery_snapshot,terms_document_id)
+       VALUES($1,'CONFIRMED','PAID','UNFULFILLED','ZERO_VALUE',30000,0,0,'{}','{}',$2::jsonb,$3) RETURNING id`,
+      [account.rows[0].id, JSON.stringify({ suffix }), terms.rows[0].id],
+    )).rows[0].id;
+    await creditWalletLot(client, { accountId: account.rows[0].id, amountFils: 10_000, sourceType: "TEST", sourceId: "old-lot", operationKey: "wallet:old-lot" });
+    await creditWalletLot(client, { accountId: account.rows[0].id, amountFils: 20_000, sourceType: "TEST", sourceId: "new-lot", operationKey: "wallet:new-lot" });
+    const firstOrderId = await makeOrder("first");
+    const competingOrderId = await makeOrder("competing");
+
+    const held = await holdWalletTender(client, { accountId: account.rows[0].id, orderId: firstOrderId, amountFils: 25_000 });
+    expect(await holdWalletTender(client, { accountId: account.rows[0].id, orderId: firstOrderId, amountFils: 25_000 })).toEqual(held);
+    await expect(holdWalletTender(client, { accountId: account.rows[0].id, orderId: competingOrderId, amountFils: 10_000 })).rejects.toThrow("WALLET_BALANCE_INSUFFICIENT");
+    expect(await getWalletSummary(account.rows[0].id)).toMatchObject({ walletAvailableFils: 5_000, walletHeldFils: 25_000 });
+
+    await captureWalletHold(client, firstOrderId);
+    expect(await getWalletSummary(account.rows[0].id)).toMatchObject({ walletAvailableFils: 5_000, walletHeldFils: 0 });
+    await releaseWalletHold(client, firstOrderId);
+    expect(await getWalletSummary(account.rows[0].id)).toMatchObject({ walletAvailableFils: 30_000, walletHeldFils: 0 });
+    const lots = await client.execute<{ source_id: string; available_fils: string }>(
+      "SELECT source_id,available_fils FROM wallet_lot WHERE account_id=$1 ORDER BY created_at,id",
+      [account.rows[0].id],
+    );
+    expect(lots.rows.map((lot) => [lot.source_id, Number(lot.available_fils)])).toEqual([
+      ["old-lot", 10_000],
+      ["new-lot", 20_000],
+    ]);
+  });
+
+  it("confirms a fully wallet-funded order without a provider payment and restores it on cancellation", async () => {
+    await client.execute("UPDATE promotion_rule SET enabled=false");
+    await client.execute("UPDATE app_setting SET value='\"NONE_REVIEWED\"'::jsonb WHERE key='checkout.tax_policy'");
+    const account = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status,email_verified_at,phone_verified_at) VALUES('wallet-order@v02.test','hash','Wallet Order Buyer','ACTIVE',now(),now()) RETURNING id",
+    );
+    const zone = await client.execute<{ id: string }>(
+      "INSERT INTO delivery_zone(name_en,name_ar,fee_fils,eta_min_days,eta_max_days,policy_reviewed) VALUES('Wallet Zone','منطقة المحفظة',2000,1,1,true) RETURNING id",
+    );
+    const window = await client.execute<{ id: string }>(
+      "INSERT INTO delivery_window(zone_id,weekday,starts_at,ends_at,capacity) VALUES($1,0,'10:00','14:00',5) RETURNING id",
+      [zone.rows[0].id],
+    );
+    const terms = await client.execute<{ id: string }>(
+      "INSERT INTO terms_document(kind,version,language,title,body,content_hash,published_at) VALUES('TERMS','wallet-order-v0.2','en','Wallet order terms','Wallet order terms','wallet-order-v02',now()) RETURNING id",
+    );
+    const product = await client.execute<{ id: string }>(
+      "INSERT INTO product(slug,name_en,name_ar,product_type,status,base_price_fils) VALUES('wallet-order-product','Wallet order product','منتج المحفظة','equipment','ACTIVE',50000) RETURNING id",
+    );
+    const variant = await client.execute<{ id: string }>(
+      "INSERT INTO product_variant(product_id,sku) VALUES($1,'WALLET-ORDER-001') RETURNING id",
+      [product.rows[0].id],
+    );
+    await client.execute("INSERT INTO inventory_balance(variant_id,on_hand,reserved) VALUES($1,2,0)", [variant.rows[0].id]);
+    const cart = await client.execute<{ id: string }>("INSERT INTO cart(account_id) VALUES($1) RETURNING id", [account.rows[0].id]);
+    await client.execute("INSERT INTO cart_line(cart_id,variant_id,quantity,selected) VALUES($1,$2,1,true)", [cart.rows[0].id, variant.rows[0].id]);
+    await creditWalletLot(client, { accountId: account.rows[0].id, amountFils: 60_000, sourceType: "TEST", sourceId: "full-wallet-order", operationKey: "wallet:full-order" });
+
+    const result = await checkout(account.rows[0].id, {
+      paymentMethod: "CARD",
+      fulfillmentMode: "DELIVERY",
+      deliveryZoneId: zone.rows[0].id,
+      deliveryWindowId: window.rows[0].id,
+      recipient: { name: "Wallet Buyer", phone: "+962790000103", city: "Amman", area: "Abdoun", street: "Wallet Street" },
+      termsDocumentId: terms.rows[0].id,
+      idempotencyKey: "v02-fully-wallet-order",
+      doorstepAuthorized: true,
+      walletFils: 52_000,
+    });
+
+    expect(result).toMatchObject({ status: "CONFIRMED", totalFils: 52_000 });
+    const stored = await client.execute<{ payment_method: string; external_due_fils: string; payment_count: number; hold_status: string }>(
+      `SELECT orders.payment_method,orders.external_due_fils,
+              (SELECT count(*)::int FROM payment WHERE order_id=orders.id) AS payment_count,
+              (SELECT status FROM wallet_hold WHERE order_id=orders.id) AS hold_status
+       FROM shop_order AS orders WHERE orders.public_id=$1`,
+      [result.orderId],
+    );
+    expect(stored.rows[0]).toMatchObject({ payment_method: "ZERO_VALUE", payment_count: 0, hold_status: "CAPTURED" });
+    expect(Number(stored.rows[0].external_due_fils)).toBe(0);
+    expect(await getWalletSummary(account.rows[0].id)).toMatchObject({ walletAvailableFils: 8_000, walletHeldFils: 0 });
+    await cancelOrder(account.rows[0].id, result.orderId);
+    expect(await getWalletSummary(account.rows[0].id)).toMatchObject({ walletAvailableFils: 60_000, walletHeldFils: 0 });
+
+    await client.execute("INSERT INTO cart_line(cart_id,variant_id,quantity,selected) VALUES($1,$2,1,true)", [cart.rows[0].id, variant.rows[0].id]);
+    const split = await checkout(account.rows[0].id, {
+      paymentMethod: "CARD",
+      fulfillmentMode: "DELIVERY",
+      deliveryZoneId: zone.rows[0].id,
+      deliveryWindowId: window.rows[0].id,
+      recipient: { name: "Wallet Buyer", phone: "+962790000103", city: "Amman", area: "Abdoun", street: "Wallet Street" },
+      termsDocumentId: terms.rows[0].id,
+      idempotencyKey: "v02-wallet-card-split",
+      doorstepAuthorized: true,
+      walletFils: 20_000,
+    });
+    expect(split.status).toBe("PAYMENT_REQUIRED");
+    const splitStored = await client.execute<{ wallet_tender_fils: string; external_due_fils: string; amount_fils: string; hold_status: string }>(
+      `SELECT orders.wallet_tender_fils,orders.external_due_fils,payment.amount_fils,
+              (SELECT status FROM wallet_hold WHERE order_id=orders.id) AS hold_status
+       FROM shop_order AS orders JOIN payment ON payment.order_id=orders.id WHERE orders.public_id=$1`,
+      [split.orderId],
+    );
+    expect(Number(splitStored.rows[0].wallet_tender_fils)).toBe(20_000);
+    expect(Number(splitStored.rows[0].external_due_fils)).toBe(32_000);
+    expect(Number(splitStored.rows[0].amount_fils)).toBe(32_000);
+    expect(splitStored.rows[0].hold_status).toBe("HELD");
+    await cancelOrder(account.rows[0].id, split.orderId);
+    expect(await getWalletSummary(account.rows[0].id)).toMatchObject({ walletAvailableFils: 60_000, walletHeldFils: 0 });
   });
 
   it("quotes the selected cart with the winning sale and mutually permitted coupon", async () => {
@@ -235,6 +394,13 @@ describe("v0.2 release journeys", () => {
     );
     await client.execute("UPDATE app_setting SET value='\"NONE_REVIEWED\"'::jsonb WHERE key='checkout.tax_policy'");
     await client.execute("UPDATE app_setting SET value='true'::jsonb WHERE key='delivery.cod_redelivery_policy_reviewed'");
+    await creditWalletLot(client, {
+      accountId: account.rows[0].id,
+      amountFils: 30_000,
+      sourceType: "TEST",
+      sourceId: "checkout-wallet-lot",
+      operationKey: "wallet:credit:checkout-wallet-lot",
+    });
 
     const result = await checkout(account.rows[0].id, {
       paymentMethod: "COD",
@@ -246,14 +412,17 @@ describe("v0.2 release journeys", () => {
       idempotencyKey: "v02-pricing-checkout-once",
       doorstepAuthorized: false,
       couponCode: "once10",
+      walletFils: 30_000,
     });
 
     expect(result.totalFils).toBe(75_000);
-    const stored = await client.execute<{ discount_fils: string; quote_snapshot: { appliedRules: { id: string }[] } }>(
-      "SELECT discount_fils,quote_snapshot FROM shop_order WHERE public_id=$1",
+    const stored = await client.execute<{ discount_fils: string; wallet_tender_fils: string; external_due_fils: string; quote_snapshot: { appliedRules: { id: string }[] } }>(
+      "SELECT discount_fils,wallet_tender_fils,external_due_fils,quote_snapshot FROM shop_order WHERE public_id=$1",
       [result.orderId],
     );
     expect(Number(stored.rows[0].discount_fils)).toBe(28_000);
+    expect(Number(stored.rows[0].wallet_tender_fils)).toBe(30_000);
+    expect(Number(stored.rows[0].external_due_fils)).toBe(45_000);
     expect(stored.rows[0].quote_snapshot.appliedRules.map((rule) => rule.id)).toContain("00000000-0000-4000-8000-000000000212");
     const usage = await client.execute<{ state: string; reduction_fils: string | number }>(
       "SELECT state,reduction_fils FROM promotion_usage WHERE order_id=(SELECT id FROM shop_order WHERE public_id=$1) ORDER BY reduction_fils DESC",
@@ -273,6 +442,7 @@ describe("v0.2 release journeys", () => {
       idempotencyKey: "v02-pricing-checkout-once",
       doorstepAuthorized: false,
       couponCode: "once10",
+      walletFils: 30_000,
     });
     expect(replay).toEqual(result);
     const replayUsage = await client.execute<{ count: number }>(
@@ -280,6 +450,24 @@ describe("v0.2 release journeys", () => {
       [result.orderId],
     );
     expect(replayUsage.rows[0].count).toBe(2);
+    expect(await getWalletSummary(account.rows[0].id)).toMatchObject({ walletAvailableFils: 0, walletHeldFils: 0 });
+    const unearned = await client.execute<{ count: number }>(
+      "SELECT count(*)::int AS count FROM point_ledger WHERE account_id=$1 AND source_type='PURCHASE'",
+      [account.rows[0].id],
+    );
+    expect(unearned.rows[0].count).toBe(0);
+    const completedOrder = await client.execute<{ id: string }>(
+      `UPDATE shop_order SET status='COMPLETED',fulfillment_status='DELIVERED',payment_status='PAID',collected_fils=external_due_fils
+       WHERE public_id=$1 RETURNING id`,
+      [result.orderId],
+    );
+    expect(await awardDeliveryPoints(client, completedOrder.rows[0].id)).toBe(true);
+    expect(await awardDeliveryPoints(client, completedOrder.rows[0].id)).toBe(false);
+    const earned = await client.execute<{ milli_points: string }>(
+      "SELECT milli_points FROM point_ledger WHERE account_id=$1 AND source_type='PURCHASE'",
+      [account.rows[0].id],
+    );
+    expect(Number(earned.rows[0].milli_points)).toBe(72_000);
 
     const secondAccount = await client.execute<{ id: string }>(
       "INSERT INTO account(email_normalized,password_hash,display_name,status,email_verified_at,phone_verified_at) VALUES('checkout-pricing-2@v02.test','hash','Second Pricing Buyer','ACTIVE',now(),now()) RETURNING id",

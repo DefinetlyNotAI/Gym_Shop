@@ -16,12 +16,19 @@ import {
   releasePromotionUsage,
   reservePromotionUsage,
 } from "@/lib/pricing/service";
+import {
+  availableWalletFils,
+  captureWalletHold,
+  holdWalletTender,
+  releaseWalletHold,
+} from "@/lib/wallet/service";
 
 const checkoutInput = z.object({
   paymentMethod: z.enum(["CARD","COD"]), fulfillmentMode:z.enum(["DELIVERY","PICKUP"]).default("DELIVERY"), deliveryZoneId: z.string().uuid().optional(), deliveryWindowId: z.string().uuid().optional(), pickupLocationId:z.string().uuid().optional(),
   recipient: z.object({ name:z.string().min(2), phone:z.string().min(8), city:z.string().min(2), area:z.string().min(2), street:z.string().min(2), building:z.string().optional(), notes:z.string().max(500).optional() }),
   termsDocumentId: z.string().uuid(), idempotencyKey: z.string().min(16).max(100), doorstepAuthorized: z.boolean().default(false),
   couponCode: z.string().trim().min(3).max(64).optional(),
+  walletFils: z.number().int().nonnegative().default(0),
 }).refine(value=>value.fulfillmentMode==='DELIVERY'?Boolean(value.deliveryZoneId&&value.deliveryWindowId):Boolean(value.pickupLocationId),{message:'Fulfillment selection is incomplete'});
 
 const checkoutResult = z.object({
@@ -30,7 +37,7 @@ const checkoutResult = z.object({
 });
 type CheckoutResult = z.infer<typeof checkoutResult>;
 
-export async function quoteSelectedCart(accountId: string, zoneId: string, options: { couponCode?: string } = {}) {
+export async function quoteSelectedCart(accountId: string, zoneId: string, options: { couponCode?: string; walletFils?: number } = {}) {
   return withDatabaseClient(async (client) => {
     const lines = await client.execute<{ id:string; product_id:string; variant_id:string; category_ids:string[]; collection_ids:string[]; quantity:number; unit_price_fils:string; available:number|null }>(
       `SELECT line.id,line.quantity,COALESCE(variant.price_override_fils,product.base_price_fils) AS unit_price_fils,
@@ -61,6 +68,11 @@ export async function quoteSelectedCart(accountId: string, zoneId: string, optio
       shippingFils: deliveryFils,
       taxFils: 0,
     });
+    const walletAvailableFils = await availableWalletFils(client, accountId);
+    const requestedWalletFils = options.walletFils ?? 0;
+    if (!Number.isSafeInteger(requestedWalletFils) || requestedWalletFils < 0) throw new Error("WALLET_AMOUNT_INVALID");
+    if (requestedWalletFils > walletAvailableFils) throw new Error("WALLET_BALANCE_INSUFFICIENT");
+    const walletTenderFils = Math.min(requestedWalletFils, pricing.totalFils);
     return {
       currency:"JOD",
       merchandiseFils,
@@ -68,6 +80,9 @@ export async function quoteSelectedCart(accountId: string, zoneId: string, optio
       taxFils:pricing.taxFils,
       deliveryFils,
       totalFils:pricing.totalFils,
+      walletAvailableFils,
+      walletTenderFils,
+      externalDueFils:pricing.totalFils-walletTenderFils,
       lines:pricing.lines,
       appliedRules:pricing.appliedRules,
       rejections:[...rules.rejections,...pricing.rejections],
@@ -129,15 +144,24 @@ export async function checkout(accountId: string, raw: unknown) {
     });
     const discount = pricing.saleFils + pricing.couponFils + pricing.referralFils;
     const total=pricing.totalFils;
-    if(input.paymentMethod==='CARD'&&total%10!==0)throw new Error('CARD_AMOUNT_REQUIRES_TEN_FILS_PRECISION');
+    const walletAvailable = await availableWalletFils(client, accountId);
+    if (input.walletFils > walletAvailable) throw new Error("WALLET_BALANCE_INSUFFICIENT");
+    const walletTender = Math.min(input.walletFils, total);
+    const externalDue = total-walletTender;
+    const effectivePaymentMethod = externalDue === 0 ? "ZERO_VALUE" : input.paymentMethod;
+    if(effectivePaymentMethod==='CARD'&&externalDue%10!==0)throw new Error('CARD_AMOUNT_REQUIRES_TEN_FILS_PRECISION');
     const order = await client.execute<{id:string;public_id:string}>(
-      `INSERT INTO shop_order(account_id,status,payment_status,fulfillment_status,payment_method,merchandise_fils,delivery_fils,discount_fils,external_due_fils,
+      `INSERT INTO shop_order(account_id,status,payment_status,fulfillment_status,payment_method,merchandise_fils,delivery_fils,discount_fils,wallet_tender_fils,external_due_fils,
         quote_snapshot,recipient_snapshot,delivery_snapshot,terms_document_id,placed_at)
-       VALUES($1,$2,$3,'UNFULFILLED',$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12,now()) RETURNING id,public_id`,
-      [accountId,input.paymentMethod==='COD'?'CONFIRMED':'CREATED',input.paymentMethod==='COD'?'UNPAID':'PENDING',input.paymentMethod,merchandise,delivery,discount,total,
-       JSON.stringify({currency:'JOD',merchandiseFils:merchandise,discountFils:discount,taxFils:0,deliveryFils:delivery,totalFils:total,lines:pricing.lines,appliedRules:pricing.appliedRules,rejections:[...rules.rejections,...pricing.rejections]}),JSON.stringify(input.recipient),JSON.stringify({mode:input.fulfillmentMode,zoneId:input.deliveryZoneId,windowId:input.deliveryWindowId,scheduledDate,pickupLocationId:input.pickupLocationId,doorstepAuthorized:input.doorstepAuthorized,codRedelivery:input.paymentMethod==='COD'&&input.fulfillmentMode==='DELIVERY'?{additionalFeeMultiplier:2,chargeTrigger:'THIRD_ATTEMPT_MADE'}:null}),input.termsDocumentId],
+       VALUES($1,$2,$3,'UNFULFILLED',$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13,now()) RETURNING id,public_id`,
+      [accountId,effectivePaymentMethod==='COD'||effectivePaymentMethod==='ZERO_VALUE'?'CONFIRMED':'CREATED',effectivePaymentMethod==='COD'?'UNPAID':effectivePaymentMethod==='ZERO_VALUE'?'PAID':'PENDING',effectivePaymentMethod,merchandise,delivery,discount,walletTender,externalDue,
+       JSON.stringify({currency:'JOD',merchandiseFils:merchandise,discountFils:discount,taxFils:0,deliveryFils:delivery,totalFils:total,walletTenderFils:walletTender,externalDueFils:externalDue,lines:pricing.lines,appliedRules:pricing.appliedRules,rejections:[...rules.rejections,...pricing.rejections]}),JSON.stringify(input.recipient),JSON.stringify({mode:input.fulfillmentMode,zoneId:input.deliveryZoneId,windowId:input.deliveryWindowId,scheduledDate,pickupLocationId:input.pickupLocationId,doorstepAuthorized:input.doorstepAuthorized,codRedelivery:effectivePaymentMethod==='COD'&&input.fulfillmentMode==='DELIVERY'?{additionalFeeMultiplier:2,chargeTrigger:'THIRD_ATTEMPT_MADE'}:null}),input.termsDocumentId],
     );
-    await reservePromotionUsage(client, { accountId, orderId: order.rows[0].id, appliedRules: pricing.appliedRules, consume: input.paymentMethod === "COD" });
+    if (walletTender > 0) {
+      await holdWalletTender(client, { accountId, orderId: order.rows[0].id, amountFils: walletTender });
+      if (effectivePaymentMethod === "COD" || effectivePaymentMethod === "ZERO_VALUE") await captureWalletHold(client, order.rows[0].id);
+    }
+    await reservePromotionUsage(client, { accountId, orderId: order.rows[0].id, appliedRules: pricing.appliedRules, consume: effectivePaymentMethod !== "CARD" });
     for (const line of lines.rows) {
       const linePricing = pricing.lines.find((priced) => priced.lineId === line.line_id);
       if (!linePricing) throw new Error("PRICING_LINE_MISSING");
@@ -151,19 +175,19 @@ export async function checkout(accountId: string, raw: unknown) {
     await client.execute("DELETE FROM cart_line WHERE id=ANY($1::uuid[])",[lines.rows.map(line=>line.line_id)]);
     await client.execute("INSERT INTO consent_event(account_id,order_id,purpose,document_id,granted,affirmative_action) VALUES($1,$2,'ORDER_TERMS',$3,true,'checkout_checkbox')",[accountId,order.rows[0].id,input.termsDocumentId]);
     const pickupPin=input.fulfillmentMode==='PICKUP'?String(randomInt(100000,1000000)):undefined;
-    await client.execute("INSERT INTO shipment(order_id,internal_reference,expected_cash_fils,delivery_pin_hash,pin_expires_at,doorstep_authorized) VALUES($1,$2,$3,$4,CASE WHEN $4::text IS NULL THEN NULL ELSE now()+interval '7 days' END,$5)",[order.rows[0].id,`SHP-${order.rows[0].public_id.slice(4).toUpperCase()}`,input.paymentMethod==='COD'?total:0,pickupPin?hashToken(pickupPin):null,input.doorstepAuthorized]);
+    await client.execute("INSERT INTO shipment(order_id,internal_reference,expected_cash_fils,delivery_pin_hash,pin_expires_at,doorstep_authorized) VALUES($1,$2,$3,$4,CASE WHEN $4::text IS NULL THEN NULL ELSE now()+interval '7 days' END,$5)",[order.rows[0].id,`SHP-${order.rows[0].public_id.slice(4).toUpperCase()}`,effectivePaymentMethod==='COD'?externalDue:0,pickupPin?hashToken(pickupPin):null,input.doorstepAuthorized]);
     if(pickupPin&&account.rows[0].phone_e164)await queueSecureDelivery(client,{eventType:"delivery.customer_pin.v1",aggregateType:"order",aggregateId:order.rows[0].id,accountId,channel:"PHONE",destination:account.rows[0].phone_e164,token:pickupPin,expiresAt:new Date(Date.now()+7*24*60*60*1000)});
-    if (input.paymentMethod==='CARD') {
+    if (effectivePaymentMethod==='CARD') {
       const config=getRuntimeConfig();
-      await client.execute("INSERT INTO payment(order_id,purpose,method,provider,amount_fils,status,operation_key,expires_at,reconcile_after) VALUES($1,'ORDER','CARD',$2,$3,'CREATED',$4,now()+interval '15 minutes',now()+interval '2 minutes')",[order.rows[0].id,config.SIM_MODE||config.APP_ENV==='test'?'SIMULATED_APS':'AMAZON_PAYMENT_SERVICES',total,`order:${order.rows[0].id}`]);
+      await client.execute("INSERT INTO payment(order_id,purpose,method,provider,amount_fils,status,operation_key,expires_at,reconcile_after) VALUES($1,'ORDER','CARD',$2,$3,'CREATED',$4,now()+interval '15 minutes',now()+interval '2 minutes')",[order.rows[0].id,config.SIM_MODE||config.APP_ENV==='test'?'SIMULATED_APS':'AMAZON_PAYMENT_SERVICES',externalDue,`order:${order.rows[0].id}`]);
     }
     await appendAudit(client,{actorId:accountId,action:"order.created",targetType:"order",targetId:order.rows[0].id,domain:"orders",after:{method:input.paymentMethod,total}});
     await appendDomainEvent(client,{eventType:"orders.order.created.v1",aggregateType:"order",aggregateId:order.rows[0].id,payload:{orderId:order.rows[0].id,paymentMethod:input.paymentMethod}});
-    const response:CheckoutResult={orderId:order.rows[0].public_id,status:input.paymentMethod==='COD'?'CONFIRMED':'PAYMENT_REQUIRED',totalFils:total,currency:'JOD'};
+    const response:CheckoutResult={orderId:order.rows[0].public_id,status:effectivePaymentMethod==='CARD'?'PAYMENT_REQUIRED':'CONFIRMED',totalFils:total,currency:'JOD'};
     await client.execute("UPDATE idempotency_record SET status='COMPLETED',response_status=201,response_body=$2::jsonb WHERE scope='CHECKOUT' AND idempotency_key=$1",[input.idempotencyKey,JSON.stringify(response)]);
     return response;
   });
-  if (input.paymentMethod === "COD" || result.paymentReference) return result;
+  if (result.status === "CONFIRMED" || result.paymentReference) return result;
   const payment = await initializeOrderCardPayment(accountId, result.orderId);
   const completed = { ...result, paymentReference: payment.reference, paymentUrl: payment.hostedUrl, paymentFields: payment.formFields };
   await withDatabaseClient((client) => client.execute(
@@ -212,6 +236,7 @@ export async function applyCardPaymentStatus(input: Pick<ProviderWebhook,"refere
     const allocation=await client.execute("UPDATE stock_allocation SET status='COMMITTED',expires_at=NULL,updated_at=now() WHERE order_line_id IN(SELECT id FROM order_line WHERE order_id=$1) AND status='HELD'",[row.order_id]);
     if(!allocation.rowCount)throw new Error("PAYMENT_ALLOCATION_MISSING");
     await client.execute("UPDATE shop_order SET status='CONFIRMED',payment_status='PAID',collected_fils=external_due_fils,updated_at=now() WHERE id=$1",[row.order_id]);
+    await captureWalletHold(client,row.order_id);
     await consumePromotionUsage(client,row.order_id);
     await appendDomainEvent(client,{eventType:"payments.card.confirmed.v1",aggregateType:"order",aggregateId:row.order_id,payload:{orderId:row.order_id}});
     return{confirmed:true,replayed:false};
@@ -273,6 +298,7 @@ async function failUnconfirmedOrder(client:DatabaseClient,paymentId:string,order
   await client.execute("UPDATE payment SET status='FAILED',signed_evidence=COALESCE($2::jsonb,signed_evidence),updated_at=now() WHERE id=$1 AND status<>'CONFIRMED'",[paymentId,evidence===null?null:JSON.stringify(evidence)]);
   await client.execute("UPDATE shop_order SET status='CANCELLED',payment_status='FAILED',fulfillment_status='CANCELLED',cancelled_at=now(),updated_at=now() WHERE id=$1",[orderId]);
   await client.execute("UPDATE shipment SET state='CANCELLED',delivery_pin_hash=NULL,pin_expires_at=NULL,updated_at=now() WHERE order_id=$1",[orderId]);
+  await releaseWalletHold(client,orderId);
   await releasePromotionUsage(client,orderId,eventType);
   await appendDomainEvent(client,{eventType,aggregateType:"order",aggregateId:orderId,payload:{orderId}});
 }
@@ -285,6 +311,7 @@ export async function cancelOrder(accountId:string, publicId:string){
     for(const allocation of allocations.rows){if(['HELD','COMMITTED'].includes(allocation.status)){const released=await client.execute("UPDATE inventory_balance SET reserved=reserved-$2,updated_at=now() WHERE variant_id=$1 AND reserved>=$2",[allocation.variant_id,allocation.quantity]);if(!released.rowCount)throw new Error("INVENTORY_INVARIANT");await client.execute("UPDATE stock_allocation SET status='RELEASED',updated_at=now() WHERE id=$1",[allocation.id]);await client.execute(`INSERT INTO stock_movement(variant_id,kind,reserved_delta,on_hand_after,reserved_after,source_type,source_id,actor_id,reason) SELECT variant_id,'RELEASE',-($2::integer),on_hand,reserved,'ORDER_CANCEL',$3,$4,'Customer cancelled before packing' FROM inventory_balance WHERE variant_id=$1`,[allocation.variant_id,allocation.quantity,allocation.id,accountId]);}}
     await client.execute("UPDATE shop_order SET status='CANCELLED',payment_status=CASE WHEN collected_fils>0 THEN 'PARTIALLY_REFUNDED' ELSE 'CANCELLED' END,fulfillment_status='CANCELLED',cancelled_at=now(),updated_at=now() WHERE id=$1",[row.id]);
     await client.execute("UPDATE shipment SET state='CANCELLED',delivery_pin_hash=NULL,pin_expires_at=NULL,updated_at=now() WHERE order_id=$1",[row.id]);
+    await releaseWalletHold(client,row.id);
     await releasePromotionUsage(client,row.id,"ORDER_CANCELLED");
     if(Number(row.collected_fils)>0) await client.execute("INSERT INTO refund(order_id,payment_id,amount_fils,reason,status) SELECT $1,id,$2,'PRE_PACK_CANCELLATION','REQUIRED' FROM payment WHERE order_id=$1 AND status='CONFIRMED' ORDER BY created_at LIMIT 1",[row.id,Number(row.collected_fils)]);
     await appendDomainEvent(client,{eventType:"orders.order.cancelled.v1",aggregateType:"order",aggregateId:row.id,payload:{orderId:row.id}}); return {cancelled:true};

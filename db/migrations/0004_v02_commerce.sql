@@ -139,6 +139,92 @@ ALTER TABLE order_line
   ADD CHECK (line_base_fils >= 0),
   ADD CHECK (line_net_fils >= 0 AND line_net_fils <= line_base_fils);
 
+CREATE TABLE point_ledger (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES account(id),
+  direction text NOT NULL CHECK (direction IN ('CREDIT','DEBIT')),
+  kind text NOT NULL CHECK (kind IN ('CREDIT','DEBIT','REVERSAL','ADJUSTMENT')),
+  milli_points bigint NOT NULL CHECK (milli_points > 0),
+  source_type text NOT NULL,
+  source_id text NOT NULL,
+  operation_key text NOT NULL UNIQUE,
+  reason text,
+  actor_id uuid REFERENCES account(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX point_ledger_account_time_idx ON point_ledger(account_id, created_at DESC);
+
+CREATE TABLE wallet_lot (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES account(id),
+  source_type text NOT NULL,
+  source_id text NOT NULL,
+  original_fils bigint NOT NULL CHECK (original_fils > 0),
+  available_fils bigint NOT NULL CHECK (available_fils >= 0),
+  held_fils bigint NOT NULL DEFAULT 0 CHECK (held_fils >= 0),
+  settled boolean NOT NULL DEFAULT true,
+  disputed boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (available_fils + held_fils <= original_fils),
+  UNIQUE (source_type, source_id)
+);
+
+CREATE INDEX wallet_lot_spend_idx ON wallet_lot(account_id, settled, disputed, created_at, id);
+
+CREATE TABLE wallet_hold (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES account(id),
+  order_id uuid NOT NULL UNIQUE REFERENCES shop_order(id),
+  amount_fils bigint NOT NULL CHECK (amount_fils > 0),
+  status text NOT NULL CHECK (status IN ('HELD','CAPTURED','RELEASED','RESTORED')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  captured_at timestamptz,
+  released_at timestamptz
+);
+
+CREATE TABLE wallet_hold_allocation (
+  hold_id uuid NOT NULL REFERENCES wallet_hold(id),
+  lot_id uuid NOT NULL REFERENCES wallet_lot(id),
+  amount_fils bigint NOT NULL CHECK (amount_fils > 0),
+  PRIMARY KEY (hold_id, lot_id)
+);
+
+CREATE TABLE wallet_ledger (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES account(id),
+  lot_id uuid REFERENCES wallet_lot(id),
+  order_id uuid REFERENCES shop_order(id),
+  direction text NOT NULL CHECK (direction IN ('CREDIT','DEBIT')),
+  kind text NOT NULL CHECK (kind IN ('CREDIT','DEBIT','HOLD','RELEASE','PAYOUT','REVERSAL','ADJUSTMENT')),
+  amount_fils bigint NOT NULL CHECK (amount_fils > 0),
+  source_type text NOT NULL,
+  source_id text NOT NULL,
+  operation_key text NOT NULL UNIQUE,
+  reason text,
+  actor_id uuid REFERENCES account(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX wallet_ledger_account_time_idx ON wallet_ledger(account_id, created_at DESC);
+
+CREATE TABLE point_conversion (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES account(id),
+  week_start date NOT NULL,
+  blocks integer NOT NULL CHECK (blocks BETWEEN 1 AND 5),
+  point_milli_debit bigint NOT NULL CHECK (point_milli_debit > 0),
+  wallet_fils_credit bigint NOT NULL CHECK (wallet_fils_credit > 0),
+  operation_key text NOT NULL UNIQUE,
+  request_hash text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX point_conversion_week_idx ON point_conversion(account_id, week_start);
+
+ALTER TABLE shop_order
+  ADD COLUMN wallet_tender_fils bigint NOT NULL DEFAULT 0 CHECK (wallet_tender_fils >= 0);
+
 INSERT INTO permission(id,domain,action,sensitive)
 VALUES ('promotions.manage','promotions','manage',false);
 
