@@ -20,24 +20,22 @@ function selectedHalf(value: string, language: Language) {
 function normalizeLegacyBilingualText(root: ParentNode, language: Language) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
-    const source = originalText.get(node) ?? node.data; originalText.set(node, source);
+    const previous = originalText.get(node);
+    const source = previous && (node.data === selectedHalf(previous, "en") || node.data === selectedHalf(previous, "ar")) ? previous : node.data; originalText.set(node, source);
     const selected = selectedHalf(source, language); if (node.data !== selected) node.data = selected;
   }
   const elements = root instanceof Element ? [root, ...root.querySelectorAll("*")] : [...root.querySelectorAll("*")];
   for (const element of elements) for (const name of LOCALIZED_ATTRIBUTES) {
     const current = element.getAttribute(name); if (current === null) continue;
     const saved = originalAttributes.get(element) ?? new Map<string, string>(); if (!originalAttributes.has(element)) originalAttributes.set(element, saved);
-    const source = saved.get(name) ?? current; saved.set(name, source);
+    const previous = saved.get(name);
+    const source = previous && (current === selectedHalf(previous, "en") || current === selectedHalf(previous, "ar")) ? previous : current; saved.set(name, source);
     const selected = selectedHalf(source, language); if (current !== selected) element.setAttribute(name, selected);
   }
 }
 
 export function LanguageProvider({ initialLanguage, children }: { initialLanguage: Language; children: React.ReactNode }) {
-  const [language, updateLanguage] = useState<Language>(() => {
-    if (typeof window === "undefined") return initialLanguage;
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === "ar" || stored === "en" ? stored : initialLanguage;
-  });
+  const [language, updateLanguage] = useState<Language>(initialLanguage);
   function setLanguage(next: Language) {
     updateLanguage(next);
     localStorage.setItem(STORAGE_KEY, next);
