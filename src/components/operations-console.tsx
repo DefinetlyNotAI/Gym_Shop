@@ -2,12 +2,14 @@
 
 import{useState}from"react";
 import{PromotionOperations,type Campaign}from"@/components/promotion-operations";
+import{ReferralOperations,type ReferralOperationsData}from"@/components/referral-operations";
 
 type RecordRow=Record<string,unknown>;
 type Props={
   products:RecordRow[];inventory:RecordRow[];customers:RecordRow[];staff:RecordRow[];
   refunds:RecordRow[];cash:RecordRow[];templates:RecordRow[];audits:RecordRow[];
   campaigns:Campaign[];
+  referrals:ReferralOperationsData;
   canEditCatalog:boolean;canAdjustInventory:boolean;canInviteStaff:boolean;
   canManagePromotions:boolean;
 };
@@ -20,7 +22,7 @@ export function OperationsConsole(props:Props){
   async function run(action:()=>Promise<unknown>){try{const result=await action();setMessage(`Saved: ${JSON.stringify(result)}`);location.reload();}catch(error){setMessage(error instanceof Error?error.message:"Request failed");}}
   return <>
     <nav className="section-nav" aria-label="Operations sections">
-      {[["catalog","Products"],["inventory","Inventory"],["customers","Customers"],["promotions","Promotions"],["finance","Finance"],["notifications","Notifications"],["audits","Audits"],["staff","Staff"]].map(([id,label])=><a key={id} href={`#${id}`}>{label}</a>)}
+      {[["catalog","Products"],["inventory","Inventory"],["customers","Customers"],["promotions","Promotions"],["referrals","Referrals"],["finance","Finance"],["notifications","Notifications"],["audits","Audits"],["staff","Staff"]].map(([id,label])=><a key={id} href={`#${id}`}>{label}</a>)}
     </nav>
     <p className="operation-message" aria-live="polite">{message}</p>
 
@@ -38,5 +40,6 @@ export function OperationsConsole(props:Props){
 
     <section id="staff"><h2>Staff / الموظفون</h2>{props.canInviteStaff?<form className="panel form-grid" action={form=>run(()=>mutate("/api/v1/admin/staff","POST",{email:form.get("email"),name:form.get("name"),role:form.get("role")}))}><input name="email" type="email" required placeholder="Staff email"/><input name="name" required placeholder="Staff name"/><select name="role"><option>DELIVERY_AGENT</option><option>SUPPORT_AGENT</option><option>LOGISTICS_STAFF</option><option>FINANCE_STAFF</option><option>ADMIN</option><option>SUPER_ADMIN</option></select><button className="secondary">Create one-use enrollment</button></form>:null}<div className="list">{props.staff.map(member=><article key={String(member.public_id)}><div><strong>{String(member.display_name)}</strong><small>{String(member.email_normalized)} · {String(member.public_id)}</small></div><span>{String(member.role_id)} · {String(member.status)}</span>{String(member.role_id)!=="CTO"?<div className="inline-actions"><button onClick={()=>run(()=>mutate(`/api/v1/admin/staff/${member.public_id}/status`,"POST",{status:"SUSPENDED"}))}>Suspend</button><button onClick={()=>run(()=>mutate(`/api/v1/admin/staff/${member.public_id}/status`,"POST",{status:"ACTIVE"}))}>Activate</button><button onClick={()=>run(()=>mutate(`/api/v1/admin/staff/${member.public_id}/status`,"POST",{status:"DISABLED"}))}>Disable</button></div>:null}</article>)}</div></section>
     {props.canManagePromotions?<PromotionOperations campaigns={props.campaigns}/>:null}
+    {props.canManagePromotions?<ReferralOperations referrals={props.referrals}/>:null}
   </>;
 }
