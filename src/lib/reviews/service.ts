@@ -20,7 +20,7 @@ async function validateReviewMedia(client: DatabaseClient, accountId: string, me
   const media = await client.execute<{ count: number }>(
     `SELECT count(*)::int AS count FROM media_object
      WHERE id=ANY($1::uuid[]) AND owner_type='ACCOUNT_UPLOAD' AND owner_id=$2
-       AND access_class='PRIVATE' AND scan_status='CLEAN' AND mime_type LIKE 'image/%' AND deleted_at IS NULL`,
+       AND access_class='PRIVATE' AND scan_status='CLEAN' AND verified_mime LIKE 'image/%' AND deleted_at IS NULL`,
     [mediaIds, accountId],
   );
   if (media.rows[0].count !== mediaIds.length) throw new Error("REVIEW_MEDIA_INVALID");

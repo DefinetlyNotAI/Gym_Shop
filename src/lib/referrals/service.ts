@@ -248,11 +248,13 @@ export async function customizeReferralCode(accountId: string, requestedCode: st
   const code = requestedCode.trim().toUpperCase();
   if (!CODE_PATTERN.test(code)) throw new Error("REFERRAL_CODE_INVALID");
   return withTransaction(async (client) => {
-    const account = await client.execute<{ email_verified_at: string | null; phone_verified_at: string | null }>(
-      "SELECT email_verified_at,phone_verified_at FROM account WHERE id=$1 FOR UPDATE",
+    const account = await client.execute<{ partner_verified: boolean }>(
+      `SELECT EXISTS(SELECT 1 FROM verification_application
+                     WHERE account_id=account.id AND status='APPROVED') AS partner_verified
+       FROM account WHERE id=$1 FOR UPDATE`,
       [accountId],
     );
-    if (!account.rows[0]?.email_verified_at || !account.rows[0].phone_verified_at) throw new Error("VERIFICATION_REQUIRED");
+    if (!account.rows[0]?.partner_verified) throw new Error("VERIFICATION_REQUIRED");
     await client.execute("UPDATE referral_code SET active=false,disabled_at=now(),disable_reason='CUSTOMIZED' WHERE account_id=$1 AND active", [accountId]);
     return (await client.execute<{ id: string; code: string }>(
       "INSERT INTO referral_code(account_id,code,custom) VALUES($1,$2,true) RETURNING id,code",

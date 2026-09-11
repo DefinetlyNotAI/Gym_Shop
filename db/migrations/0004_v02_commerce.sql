@@ -368,6 +368,81 @@ CREATE TABLE review_weekly_reward (
   UNIQUE (account_id, week_start)
 );
 
+CREATE TABLE verification_application (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  public_id text NOT NULL UNIQUE DEFAULT ('ver_' || encode(gen_random_bytes(8),'hex')),
+  account_id uuid NOT NULL REFERENCES account(id),
+  public_name text NOT NULL,
+  reason text NOT NULL,
+  platforms jsonb NOT NULL DEFAULT '[]'::jsonb,
+  evidence_media_ids uuid[] NOT NULL,
+  status text NOT NULL CHECK (status IN ('PENDING','UNDER_REVIEW','APPROVED','REJECTED','CANCELLED')),
+  reviewer_id uuid REFERENCES account(id),
+  decision_reason text,
+  submitted_at timestamptz NOT NULL DEFAULT now(),
+  decided_at timestamptz,
+  rejected_until date,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX verification_one_open_application
+  ON verification_application(account_id) WHERE status IN ('PENDING','UNDER_REVIEW','APPROVED');
+
+CREATE TABLE verification_transition (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  application_id uuid NOT NULL REFERENCES verification_application(id),
+  from_status text,
+  to_status text NOT NULL,
+  action text NOT NULL CHECK (action IN ('SUBMITTED','REVIEW_STARTED','APPROVED','REJECTED','CANCELLED','REVOKED','REINSTATED')),
+  reason text,
+  actor_id uuid REFERENCES account(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE payout_destination (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES account(id),
+  alias_masked text NOT NULL,
+  ownership_verified boolean NOT NULL DEFAULT false,
+  active boolean NOT NULL DEFAULT true,
+  changed_at timestamptz NOT NULL DEFAULT now(),
+  cooldown_until timestamptz NOT NULL DEFAULT (now()+interval '24 hours'),
+  UNIQUE (account_id, alias_masked)
+);
+
+CREATE TABLE wallet_payout (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  public_id text NOT NULL UNIQUE DEFAULT ('pay_' || encode(gen_random_bytes(8),'hex')),
+  account_id uuid NOT NULL REFERENCES account(id),
+  destination_id uuid NOT NULL REFERENCES payout_destination(id),
+  amount_fils bigint NOT NULL CHECK (amount_fils > 0),
+  status text NOT NULL CHECK (status IN ('REQUESTED','UNDER_REVIEW','APPROVED','PROCESSING','COMPLETED','FAILED','REJECTED','CANCELLED','UNKNOWN')),
+  wallet_hold_id uuid REFERENCES wallet_hold(id),
+  provider_reference text,
+  requested_at timestamptz NOT NULL DEFAULT now(),
+  reviewed_by uuid REFERENCES account(id),
+  executed_by uuid REFERENCES account(id),
+  completed_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (reviewed_by IS NULL OR reviewed_by<>account_id),
+  CHECK (executed_by IS NULL OR executed_by<>account_id)
+);
+
+CREATE TABLE wallet_payout_transition (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  payout_id uuid NOT NULL REFERENCES wallet_payout(id),
+  from_status text,
+  to_status text NOT NULL,
+  reason text,
+  actor_id uuid REFERENCES account(id),
+  provider_evidence jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO app_setting(key,value)
+VALUES ('verification.partner_marketing_gate','"UNCONFIGURED"'::jsonb),
+       ('payout.provider','"UNCONFIGURED"'::jsonb);
+
 INSERT INTO app_setting(key,value)
 VALUES
   ('referrals.link_retention_days','30'::jsonb),
@@ -379,13 +454,18 @@ VALUES
 INSERT INTO permission(id,domain,action,sensitive)
 VALUES ('promotions.manage','promotions','manage',false),
        ('referrals.manage','referrals','manage',true),
-       ('reviews.moderate','reviews','moderate',true);
+       ('reviews.moderate','reviews','moderate',true),
+       ('verification.review','verification','review',true),
+       ('payouts.review','payouts','review',true);
 
 INSERT INTO role_permission(role_id,permission_id)
 VALUES ('ADMIN','promotions.manage'),('SUPER_ADMIN','promotions.manage'),('CTO','promotions.manage'),
        ('ADMIN','referrals.manage'),('SUPER_ADMIN','referrals.manage'),('CTO','referrals.manage');
 INSERT INTO role_permission(role_id,permission_id)
 VALUES ('SUPPORT_AGENT','reviews.moderate'),('ADMIN','reviews.moderate'),('SUPER_ADMIN','reviews.moderate'),('CTO','reviews.moderate');
+INSERT INTO role_permission(role_id,permission_id)
+VALUES ('ADMIN','verification.review'),('SUPER_ADMIN','verification.review'),('CTO','verification.review'),
+       ('FINANCE_STAFF','payouts.review'),('SUPER_ADMIN','payouts.review'),('CTO','payouts.review');
 
 INSERT INTO schema_migration(name) VALUES ('0004_v02_commerce.sql');
 

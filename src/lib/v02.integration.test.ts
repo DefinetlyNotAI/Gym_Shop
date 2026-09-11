@@ -32,6 +32,7 @@ import {
 import { calculatePricingQuote, loadPricingRulesForQuote } from "@/lib/pricing/service";
 import {
   ensureReferralCode,
+  customizeReferralCode,
   getReferralPricingRule,
   lockOrderAttribution,
   qualifyReferralReward,
@@ -46,6 +47,14 @@ import {
   submitReview,
   voteHelpful,
 } from "@/lib/reviews/service";
+import {
+  decideVerification,
+  getVerificationSummary,
+  revokeVerification,
+  reinstateVerification,
+  submitVerification,
+} from "@/lib/verification/service";
+import { getPayoutAvailability, requestPayout } from "@/lib/payouts/service";
 import {
   awardDeliveryPoints,
   captureWalletHold,
@@ -263,6 +272,85 @@ describe("v0.2 release journeys", () => {
       [buyer.rows[0].id],
     );
     expect(rewards.rows[0]).toMatchObject({ count: 1, milli_points: "10000" });
+  });
+
+  it("requires hardened verification and keeps payouts visibly provider-gated without wallet holds", async () => {
+    const applicant = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status,email_verified_at,phone_verified_at) VALUES('partner@v02.test','hash','Partner','ACTIVE',now(),now()) RETURNING id",
+    );
+    const reviewer = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('verification-reviewer@v02.test','hash','Verification Reviewer','ACTIVE') RETURNING id",
+    );
+    const evidence = await client.execute<{ id: string }>(
+      `INSERT INTO media_object(owner_type,owner_id,access_class,object_key,verified_mime,byte_size,sha256,scan_status)
+       VALUES('ACCOUNT_UPLOAD',$1,'PRIVATE','verification/evidence-v02','image/jpeg',1000,'verification-evidence-v02','CLEAN') RETURNING id`,
+      [applicant.rows[0].id],
+    );
+    const applicationInput = {
+      publicName: "Partner Athlete",
+      reason: "Established training educator requesting a verified partner presence.",
+      platforms: [{ name: "Website", url: "https://partner.example" }],
+      evidenceMediaIds: [evidence.rows[0].id],
+    };
+    await expect(submitVerification(applicant.rows[0].id, applicationInput)).rejects.toThrow("PHISHING_RESISTANT_MFA_REQUIRED");
+    await client.execute(
+      "INSERT INTO webauthn_credential(id,account_id,public_key,device_label,independent_key) VALUES('partner-key',$1,decode('00','hex'),'Security key',true)",
+      [applicant.rows[0].id],
+    );
+    await client.execute(
+      "INSERT INTO recovery_secret(account_id,verifier_hash,saved_check_at) VALUES($1,'hash',now())",
+      [applicant.rows[0].id],
+    );
+    const application = await submitVerification(applicant.rows[0].id, applicationInput);
+    await expect(decideVerification(applicant.rows[0].id, application.publicId, { decision: "APPROVE", reason: "self" })).rejects.toThrow("VERIFICATION_SELF_REVIEW_DENIED");
+    await decideVerification(reviewer.rows[0].id, application.publicId, { decision: "APPROVE", reason: "Evidence and prerequisites verified" });
+    expect(await getVerificationSummary(applicant.rows[0].id)).toMatchObject({ status: "APPROVED", verified: true });
+    expect(await customizeReferralCode(applicant.rows[0].id, "PARTNER_2026")).toMatchObject({ code: "PARTNER_2026" });
+    await creditWalletLot(client, { accountId: applicant.rows[0].id, amountFils: 10_000, sourceType: "LOYALTY", sourceId: "pre-verification-loyalty", operationKey: "wallet:pre-verification-loyalty" });
+    await creditWalletLot(client, { accountId: applicant.rows[0].id, amountFils: 20_000, sourceType: "REFERRAL", sourceId: "pre-verification-referral", operationKey: "wallet:pre-verification-referral" });
+    expect(await getPayoutAvailability(applicant.rows[0].id)).toMatchObject({ verified: true, withdrawableFils: 30_000, providerAvailable: false });
+    await expect(requestPayout(applicant.rows[0].id, { destinationId: crypto.randomUUID(), amountFils: 25_000, idempotencyKey: "payout-provider-gated" })).rejects.toThrow("PAYOUT_PROVIDER_UNAVAILABLE");
+    const noMutation = await client.execute<{ payouts: number; held: string }>(
+      "SELECT (SELECT count(*)::int FROM wallet_payout WHERE account_id=$1) AS payouts,(SELECT COALESCE(sum(held_fils),0)::text FROM wallet_lot WHERE account_id=$1) AS held",
+      [applicant.rows[0].id],
+    );
+    expect(noMutation.rows[0]).toMatchObject({ payouts: 0, held: "0" });
+    await revokeVerification(applicant.rows[0].id, "No longer participating");
+    expect(await getPayoutAvailability(applicant.rows[0].id)).toMatchObject({ verified: false, withdrawableFils: 0, providerAvailable: false });
+    await expect(customizeReferralCode(applicant.rows[0].id, "PARTNER_2027")).rejects.toThrow("VERIFICATION_REQUIRED");
+    await reinstateVerification(reviewer.rows[0].id, application.publicId, "Eligibility independently reviewed again");
+    expect(await getVerificationSummary(applicant.rows[0].id)).toMatchObject({ status: "APPROVED", verified: true });
+    const actions = (await client.execute<{ action: string }>(
+      "SELECT action FROM verification_transition WHERE application_id=(SELECT id FROM verification_application WHERE public_id=$1) ORDER BY created_at,id",
+      [application.publicId],
+    )).rows.map((entry) => entry.action);
+    expect(actions).toHaveLength(5);
+    expect(actions).toEqual(expect.arrayContaining(["SUBMITTED", "REVIEW_STARTED", "APPROVED", "REVOKED", "REINSTATED"]));
+  });
+
+  it("enforces the six-calendar-month verification rejection cooldown", async () => {
+    const applicant = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status,email_verified_at,phone_verified_at) VALUES('rejected-partner@v02.test','hash','Rejected Partner','ACTIVE',now(),now()) RETURNING id",
+    );
+    const reviewer = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('rejection-reviewer@v02.test','hash','Rejection Reviewer','ACTIVE') RETURNING id",
+    );
+    await client.execute("INSERT INTO webauthn_credential(id,account_id,public_key,device_label,independent_key) VALUES('rejected-key',$1,decode('00','hex'),'Security key',true)", [applicant.rows[0].id]);
+    await client.execute("INSERT INTO recovery_secret(account_id,verifier_hash,saved_check_at) VALUES($1,'hash',now())", [applicant.rows[0].id]);
+    const evidence = await client.execute<{ id: string }>(
+      `INSERT INTO media_object(owner_type,owner_id,access_class,object_key,verified_mime,byte_size,sha256,scan_status)
+       VALUES('ACCOUNT_UPLOAD',$1,'PRIVATE','verification/rejected-v02','application/pdf',1000,'verification-rejected-v02','CLEAN') RETURNING id`,
+      [applicant.rows[0].id],
+    );
+    const input = { publicName: "Rejected Partner", reason: "Evidence requires an independent rejection decision.", platforms: [], evidenceMediaIds: [evidence.rows[0].id] };
+    const application = await submitVerification(applicant.rows[0].id, input);
+    await decideVerification(reviewer.rows[0].id, application.publicId, { decision: "REJECT", reason: "Evidence did not establish identity" });
+    await expect(submitVerification(applicant.rows[0].id, input)).rejects.toThrow("VERIFICATION_REAPPLICATION_COOLDOWN");
+    const cooldown = await client.execute<{ exact: boolean }>(
+      "SELECT rejected_until=(submitted_at AT TIME ZONE 'Asia/Amman')::date+interval '6 months' AS exact FROM verification_application WHERE public_id=$1",
+      [application.publicId],
+    );
+    expect(cooldown.rows[0].exact).toBe(true);
   });
 
   it("holds oldest wallet lots once and restores the original provenance after capture", async () => {
