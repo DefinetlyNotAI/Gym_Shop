@@ -6,6 +6,7 @@ import{appendDomainEvent}from"@/lib/events/outbox";
 import{hashToken}from"@/lib/security/crypto";
 import{queueSecureDelivery}from"@/lib/notifications/secure-delivery";
 import{awardDeliveryPoints}from"@/lib/wallet/service";
+import{qualifyReferralReward}from"@/lib/referrals/service";
 
 export async function listOperationalOrders(){return withDatabaseClient(async client=>(await client.execute("SELECT public_id,status,payment_status,fulfillment_status,payment_method,delivery_snapshot->>'mode' AS fulfillment_mode,external_due_fils,collected_fils,placed_at FROM shop_order ORDER BY created_at DESC LIMIT 200")).rows);}
 export async function listDriverAssignments(driverId:string){return withDatabaseClient(async client=>(await client.execute(`SELECT orders.public_id,shipment.internal_reference,shipment.state,shipment.attempt_number,shipment.doorstep_authorized,shipment.expected_cash_fils,orders.payment_method,orders.external_due_fils,orders.recipient_snapshot,orders.delivery_snapshot FROM shipment JOIN shop_order AS orders ON orders.id=shipment.order_id WHERE shipment.driver_id=$1 AND shipment.state IN ('ASSIGNED','READY_FOR_DELIVERY','OUT_FOR_DELIVERY','DELIVERY_FAILED','CUSTOMER_UNAVAILABLE','ADDRESS_PROBLEM','RESCHEDULED') ORDER BY COALESCE((orders.delivery_snapshot->>'date')::date,CURRENT_DATE),shipment.assigned_at`,[driverId])).rows);}
@@ -72,6 +73,7 @@ export async function completePickup(publicId:string,actorId:string,input:{pin:s
   await client.execute("UPDATE damage_claim SET status='REPLACEMENT_DELIVERED',updated_at=now() WHERE replacement_order_id=$1 AND status IN('REPLACEMENT_CREATED','REPLACEMENT_SHIPPED')",[row.order_id]);
   if(row.payment_method==="COD")await client.execute("INSERT INTO cash_ledger(driver_id,order_id,kind,amount_fils,state,source_id) VALUES($1,$2,'COLLECTION',$3,'COLLECTED_BY_DRIVER',$4)",[actorId,row.order_id,Number(row.external_due_fils),row.shipment_id]);
   await awardDeliveryPoints(client,row.order_id);
+  await qualifyReferralReward(client,row.order_id);
   await appendAudit(client,{actorId,action:"pickup.completed",targetType:"order",targetId:row.order_id,domain:"delivery"});
   await appendDomainEvent(client,{eventType:"pickup.order.collected.v1",aggregateType:"order",aggregateId:row.order_id,payload:{orderId:row.order_id}});
   return{collected:true};
@@ -106,6 +108,7 @@ export async function completeDelivery(publicId:string,driverId:string,input:{pi
   await client.execute("UPDATE damage_claim SET status='REPLACEMENT_DELIVERED',updated_at=now() WHERE replacement_order_id=$1 AND status IN('REPLACEMENT_CREATED','REPLACEMENT_SHIPPED')",[row.order_id]);
   if(row.payment_method==="COD")await client.execute("INSERT INTO cash_ledger(driver_id,order_id,kind,amount_fils,state,source_id) VALUES($1,$2,'COLLECTION',$3,'COLLECTED_BY_DRIVER',$4)",[driverId,row.order_id,amountDue,row.shipment_id]);
   await awardDeliveryPoints(client,row.order_id);
+  await qualifyReferralReward(client,row.order_id);
   await appendAudit(client,{actorId:driverId,actorRole:"DELIVERY_AGENT",action:"delivery.completed",targetType:"order",targetId:row.order_id,domain:"delivery",after:{attempt,pinVerified:pinOk,doorstep:Boolean(input.doorstep),collectedFils:row.payment_method==="COD"?amountDue:0}});
   await appendDomainEvent(client,{eventType:"delivery.order.delivered.v1",aggregateType:"order",aggregateId:row.order_id,payload:{orderId:row.order_id}});
   return{delivered:true,attempt,collectedFils:row.payment_method==="COD"?amountDue:0};

@@ -243,6 +243,7 @@ export async function reservePromotionUsage(
   },
 ) {
   for (const applied of input.appliedRules) {
+    if (applied.kind === "REFERRAL") continue;
     const rule = await client.execute<{
       campaign_id: string | null;
       maximum_uses_global: number | null;

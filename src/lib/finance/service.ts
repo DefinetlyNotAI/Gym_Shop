@@ -2,6 +2,7 @@ import { appendAudit } from "@/lib/audit/service";
 import { withDatabaseClient, withTransaction } from "@/lib/db/client";
 import { executeProviderRefund } from "@/lib/payments/provider";
 import { releaseWalletHold } from "@/lib/wallet/service";
+import { reverseReferralReward } from "@/lib/referrals/service";
 
 export async function driverCashPosition(driverId:string){return withDatabaseClient(async client=>{const result=await client.execute<{held:string;pending:string}>("SELECT COALESCE(SUM(CASE WHEN kind='COLLECTION' THEN amount_fils WHEN kind='FINANCE_VERIFICATION' THEN -amount_fils ELSE 0 END),0) AS held,COALESCE(SUM(CASE WHEN kind='HANDOVER' THEN amount_fils WHEN kind='FINANCE_VERIFICATION' THEN -amount_fils ELSE 0 END),0) AS pending FROM cash_ledger WHERE driver_id=$1",[driverId]);return{heldFils:Number(result.rows[0].held),pendingHandoverFils:Number(result.rows[0].pending)};});}
 
@@ -42,7 +43,7 @@ export async function executeRefund(refundId:string,financeId:string,manualRefer
     const locked=await client.execute<{order_id:string|null;payment_id:string|null;amount_fils:string;status:string;approved_by:string|null}>("SELECT order_id,payment_id,amount_fils,status,approved_by FROM refund WHERE id=$1 FOR UPDATE",[refundId]);
     const row=locked.rows[0];
     if(!row||!["REQUIRED","PENDING","UNKNOWN"].includes(row.status)||row.approved_by===financeId)throw new Error("REFUND_INVALID");
-    if(row.order_id){const updated=await client.execute<{payment_status:string}>("UPDATE shop_order SET refunded_fils=refunded_fils+$2,payment_status=CASE WHEN refunded_fils+$2=collected_fils THEN 'REFUNDED' ELSE 'PARTIALLY_REFUNDED' END,updated_at=now() WHERE id=$1 AND refunded_fils+$2<=collected_fils RETURNING payment_status",[row.order_id,Number(row.amount_fils)]);if(!updated.rowCount)throw new Error("REFUND_EXCEEDS_COLLECTED");if(updated.rows[0].payment_status==='REFUNDED')await releaseWalletHold(client,row.order_id);}
+    if(row.order_id){const updated=await client.execute<{payment_status:string}>("UPDATE shop_order SET refunded_fils=refunded_fils+$2,payment_status=CASE WHEN refunded_fils+$2=collected_fils THEN 'REFUNDED' ELSE 'PARTIALLY_REFUNDED' END,updated_at=now() WHERE id=$1 AND refunded_fils+$2<=collected_fils RETURNING payment_status",[row.order_id,Number(row.amount_fils)]);if(!updated.rowCount)throw new Error("REFUND_EXCEEDS_COLLECTED");if(updated.rows[0].payment_status==='REFUNDED'){await releaseWalletHold(client,row.order_id);await reverseReferralReward(client,row.order_id,'FULL_REFUND',financeId);}}
     if(row.payment_id){
       const updated=await client.execute("UPDATE payment SET status=CASE WHEN (SELECT COALESCE(SUM(amount_fils),0) FROM refund WHERE payment_id=$1 AND (status='COMPLETED' OR id=$2))>=amount_fils THEN 'REFUNDED' ELSE status END,updated_at=now() WHERE id=$1 AND status IN('CONFIRMED','REFUNDED')",[row.payment_id,refundId]);
       if(!updated.rowCount)throw new Error("PAYMENT_NOT_REFUNDABLE");

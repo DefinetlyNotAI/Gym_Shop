@@ -225,11 +225,91 @@ CREATE INDEX point_conversion_week_idx ON point_conversion(account_id, week_star
 ALTER TABLE shop_order
   ADD COLUMN wallet_tender_fils bigint NOT NULL DEFAULT 0 CHECK (wallet_tender_fils >= 0);
 
+CREATE TABLE referral_code (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES account(id),
+  code text NOT NULL CHECK (code = upper(btrim(code)) AND code ~ '^[A-Z0-9_-]{6,24}$'),
+  active boolean NOT NULL DEFAULT true,
+  custom boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  disabled_at timestamptz,
+  disabled_by uuid REFERENCES account(id),
+  disable_reason text
+);
+
+CREATE UNIQUE INDEX referral_code_case_insensitive_key ON referral_code(lower(code));
+CREATE UNIQUE INDEX referral_code_one_active_owner_key ON referral_code(account_id) WHERE active;
+
+INSERT INTO referral_code(account_id,code)
+SELECT account.id,upper(encode(gen_random_bytes(9),'hex'))
+FROM account
+WHERE NOT EXISTS(SELECT 1 FROM referral_code WHERE referral_code.account_id=account.id AND referral_code.active);
+
+CREATE FUNCTION assign_registered_account_referral_code() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO referral_code(account_id,code) VALUES(NEW.id,upper(encode(gen_random_bytes(9),'hex')));
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER account_referral_code_after_insert
+AFTER INSERT ON account FOR EACH ROW EXECUTE FUNCTION assign_registered_account_referral_code();
+
+CREATE TABLE referral_attribution (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL UNIQUE REFERENCES account(id),
+  code_id uuid NOT NULL REFERENCES referral_code(id),
+  used_code text NOT NULL,
+  source text NOT NULL CHECK (source IN ('LINK','MANUAL')),
+  status text NOT NULL DEFAULT 'ATTRIBUTED' CHECK (status IN ('ATTRIBUTED','LOCKED','REJECTED','REVOKED')),
+  attributed_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL,
+  locked_order_id uuid UNIQUE REFERENCES shop_order(id),
+  status_reason text
+);
+
+CREATE TABLE referral_reward (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  attribution_id uuid NOT NULL REFERENCES referral_attribution(id),
+  order_id uuid NOT NULL UNIQUE REFERENCES shop_order(id),
+  referrer_account_id uuid NOT NULL REFERENCES account(id),
+  buyer_account_id uuid NOT NULL REFERENCES account(id),
+  buyer_discount_fils bigint NOT NULL CHECK (buyer_discount_fils >= 0),
+  qualifying_merchandise_fils bigint NOT NULL CHECK (qualifying_merchandise_fils >= 0),
+  reward_fils bigint NOT NULL CHECK (reward_fils >= 0),
+  status text NOT NULL CHECK (status IN ('PENDING','QUALIFIED','COMPLETED','REJECTED','REVOKED')),
+  wallet_lot_id uuid REFERENCES wallet_lot(id),
+  recovery_required boolean NOT NULL DEFAULT false,
+  status_reason text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE referral_reward_event (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  reward_id uuid NOT NULL REFERENCES referral_reward(id),
+  status text NOT NULL CHECK (status IN ('PENDING','QUALIFIED','COMPLETED','REJECTED','REVOKED')),
+  reason text,
+  actor_id uuid REFERENCES account(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO app_setting(key,value)
+VALUES
+  ('referrals.link_retention_days','30'::jsonb),
+  ('referrals.buyer_rate_bps','500'::jsonb),
+  ('referrals.buyer_cap_fils','5000'::jsonb),
+  ('referrals.minimum_merchandise_fils','20000'::jsonb),
+  ('referrals.referrer_rate_bps','200'::jsonb);
+
 INSERT INTO permission(id,domain,action,sensitive)
-VALUES ('promotions.manage','promotions','manage',false);
+VALUES ('promotions.manage','promotions','manage',false),
+       ('referrals.manage','referrals','manage',true);
 
 INSERT INTO role_permission(role_id,permission_id)
-VALUES ('ADMIN','promotions.manage'),('SUPER_ADMIN','promotions.manage'),('CTO','promotions.manage');
+VALUES ('ADMIN','promotions.manage'),('SUPER_ADMIN','promotions.manage'),('CTO','promotions.manage'),
+       ('ADMIN','referrals.manage'),('SUPER_ADMIN','referrals.manage'),('CTO','referrals.manage');
 
 INSERT INTO schema_migration(name) VALUES ('0004_v02_commerce.sql');
 

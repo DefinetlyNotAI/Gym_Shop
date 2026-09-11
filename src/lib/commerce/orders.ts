@@ -22,6 +22,11 @@ import {
   holdWalletTender,
   releaseWalletHold,
 } from "@/lib/wallet/service";
+import {
+  getReferralPricingRule,
+  lockOrderAttribution,
+  rejectReferralReward,
+} from "@/lib/referrals/service";
 
 const checkoutInput = z.object({
   paymentMethod: z.enum(["CARD","COD"]), fulfillmentMode:z.enum(["DELIVERY","PICKUP"]).default("DELIVERY"), deliveryZoneId: z.string().uuid().optional(), deliveryWindowId: z.string().uuid().optional(), pickupLocationId:z.string().uuid().optional(),
@@ -65,6 +70,7 @@ export async function quoteSelectedCart(accountId: string, zoneId: string, optio
       lines: lines.rows.map((line) => ({ lineId: line.id, unitBaseFils: Number(line.unit_price_fils), quantity: line.quantity })),
       sales: rules.sales,
       coupons: rules.coupons,
+      referral: await getReferralPricingRule(client, accountId, lines.rows.map((line) => line.id)),
       shippingFils: deliveryFils,
       taxFils: 0,
     });
@@ -135,10 +141,12 @@ export async function checkout(accountId: string, raw: unknown) {
       const couponRejection = rules.rejections.find((rejection) => rejection.code.startsWith("COUPON_"));
       throw new Error(couponRejection?.code ?? "COUPON_NOT_ELIGIBLE");
     }
+    const referral = await getReferralPricingRule(client, accountId, lines.rows.map((line) => line.line_id));
     const pricing = calculatePricingQuote({
       lines: lines.rows.map((line) => ({ lineId: line.line_id, unitBaseFils: Number(line.unit_price_fils), quantity: line.quantity })),
       sales: rules.sales,
       coupons: rules.coupons,
+      referral,
       shippingFils: delivery,
       taxFils: 0,
     });
@@ -155,8 +163,14 @@ export async function checkout(accountId: string, raw: unknown) {
         quote_snapshot,recipient_snapshot,delivery_snapshot,terms_document_id,placed_at)
        VALUES($1,$2,$3,'UNFULFILLED',$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13,now()) RETURNING id,public_id`,
       [accountId,effectivePaymentMethod==='COD'||effectivePaymentMethod==='ZERO_VALUE'?'CONFIRMED':'CREATED',effectivePaymentMethod==='COD'?'UNPAID':effectivePaymentMethod==='ZERO_VALUE'?'PAID':'PENDING',effectivePaymentMethod,merchandise,delivery,discount,walletTender,externalDue,
-       JSON.stringify({currency:'JOD',merchandiseFils:merchandise,discountFils:discount,taxFils:0,deliveryFils:delivery,totalFils:total,walletTenderFils:walletTender,externalDueFils:externalDue,lines:pricing.lines,appliedRules:pricing.appliedRules,rejections:[...rules.rejections,...pricing.rejections]}),JSON.stringify(input.recipient),JSON.stringify({mode:input.fulfillmentMode,zoneId:input.deliveryZoneId,windowId:input.deliveryWindowId,scheduledDate,pickupLocationId:input.pickupLocationId,doorstepAuthorized:input.doorstepAuthorized,codRedelivery:effectivePaymentMethod==='COD'&&input.fulfillmentMode==='DELIVERY'?{additionalFeeMultiplier:2,chargeTrigger:'THIRD_ATTEMPT_MADE'}:null}),input.termsDocumentId],
+       JSON.stringify({currency:'JOD',merchandiseFils:merchandise,discountFils:discount,taxFils:0,deliveryFils:delivery,totalFils:total,walletTenderFils:walletTender,externalDueFils:externalDue,referralCode:referral?.usedCode,lines:pricing.lines,appliedRules:pricing.appliedRules,rejections:[...rules.rejections,...pricing.rejections]}),JSON.stringify(input.recipient),JSON.stringify({mode:input.fulfillmentMode,zoneId:input.deliveryZoneId,windowId:input.deliveryWindowId,scheduledDate,pickupLocationId:input.pickupLocationId,doorstepAuthorized:input.doorstepAuthorized,codRedelivery:effectivePaymentMethod==='COD'&&input.fulfillmentMode==='DELIVERY'?{additionalFeeMultiplier:2,chargeTrigger:'THIRD_ATTEMPT_MADE'}:null}),input.termsDocumentId],
     );
+    await lockOrderAttribution(client, {
+      buyerAccountId: accountId,
+      orderId: order.rows[0].id,
+      buyerDiscountFils: pricing.referralFils,
+      qualifyingMerchandiseFils: pricing.merchandiseNetFils,
+    });
     if (walletTender > 0) {
       await holdWalletTender(client, { accountId, orderId: order.rows[0].id, amountFils: walletTender });
       if (effectivePaymentMethod === "COD" || effectivePaymentMethod === "ZERO_VALUE") await captureWalletHold(client, order.rows[0].id);
@@ -300,6 +314,7 @@ async function failUnconfirmedOrder(client:DatabaseClient,paymentId:string,order
   await client.execute("UPDATE shipment SET state='CANCELLED',delivery_pin_hash=NULL,pin_expires_at=NULL,updated_at=now() WHERE order_id=$1",[orderId]);
   await releaseWalletHold(client,orderId);
   await releasePromotionUsage(client,orderId,eventType);
+  await rejectReferralReward(client,orderId,eventType);
   await appendDomainEvent(client,{eventType,aggregateType:"order",aggregateId:orderId,payload:{orderId}});
 }
 
@@ -313,6 +328,7 @@ export async function cancelOrder(accountId:string, publicId:string){
     await client.execute("UPDATE shipment SET state='CANCELLED',delivery_pin_hash=NULL,pin_expires_at=NULL,updated_at=now() WHERE order_id=$1",[row.id]);
     await releaseWalletHold(client,row.id);
     await releasePromotionUsage(client,row.id,"ORDER_CANCELLED");
+    await rejectReferralReward(client,row.id,"ORDER_CANCELLED");
     if(Number(row.collected_fils)>0) await client.execute("INSERT INTO refund(order_id,payment_id,amount_fils,reason,status) SELECT $1,id,$2,'PRE_PACK_CANCELLATION','REQUIRED' FROM payment WHERE order_id=$1 AND status='CONFIRMED' ORDER BY created_at LIMIT 1",[row.id,Number(row.collected_fils)]);
     await appendDomainEvent(client,{eventType:"orders.order.cancelled.v1",aggregateType:"order",aggregateId:row.id,payload:{orderId:row.id}}); return {cancelled:true};
   });

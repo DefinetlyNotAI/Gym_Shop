@@ -29,7 +29,16 @@ import {
   updateCampaignLifecycle,
   updatePromotionRule,
 } from "@/lib/pricing/admin";
-import { loadPricingRulesForQuote } from "@/lib/pricing/service";
+import { calculatePricingQuote, loadPricingRulesForQuote } from "@/lib/pricing/service";
+import {
+  ensureReferralCode,
+  getReferralPricingRule,
+  lockOrderAttribution,
+  qualifyReferralReward,
+  removeCheckoutReferral,
+  reverseReferralReward,
+  setCheckoutReferral,
+} from "@/lib/referrals/service";
 import {
   awardDeliveryPoints,
   captureWalletHold,
@@ -76,6 +85,9 @@ describe("v0.2 release journeys", () => {
       "promotion_rule",
       "promotion_scope",
       "promotion_usage",
+      "referral_attribution",
+      "referral_code",
+      "referral_reward",
       "wallet_hold",
       "wallet_hold_allocation",
       "wallet_ledger",
@@ -85,6 +97,10 @@ describe("v0.2 release journeys", () => {
     expect(await tableNames(requiredTables)).toEqual(requiredTables);
     const permission = await client.execute<{ id: string }>("SELECT id FROM permission WHERE id='promotions.manage'");
     expect(permission.rows).toEqual([{ id: "promotions.manage" }]);
+    const referralBackfill = await client.execute<{ accounts: number; codes: number }>(
+      "SELECT (SELECT count(*)::int FROM account) AS accounts,(SELECT count(*)::int FROM referral_code WHERE active) AS codes",
+    );
+    expect(referralBackfill.rows[0].codes).toBe(referralBackfill.rows[0].accounts);
   });
 
   it("converts only whole point blocks under the Amman weekly quota and replays safely", async () => {
@@ -112,6 +128,65 @@ describe("v0.2 release journeys", () => {
       pointMilliBalance: 50_000,
       walletAvailableFils: 2_000,
     });
+  });
+
+  it("locks one referral, applies the capped buyer benefit, and rewards only a collected order once", async () => {
+    const referrer = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status,email_verified_at,phone_verified_at) VALUES('referrer@v02.test','hash','Referrer','ACTIVE',now(),now()) RETURNING id",
+    );
+    const buyer = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status,email_verified_at,phone_verified_at) VALUES('referral-buyer@v02.test','hash','Referral Buyer','ACTIVE',now(),now()) RETURNING id",
+    );
+    const other = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status,email_verified_at,phone_verified_at) VALUES('other-referrer@v02.test','hash','Other Referrer','ACTIVE',now(),now()) RETURNING id",
+    );
+    const referrerCode = await ensureReferralCode(referrer.rows[0].id);
+    expect(await ensureReferralCode(referrer.rows[0].id)).toEqual(referrerCode);
+    const otherCode = await ensureReferralCode(other.rows[0].id);
+    await expect(setCheckoutReferral(referrer.rows[0].id, { code: referrerCode.code, source: "MANUAL" })).rejects.toThrow("REFERRAL_SELF_DENIED");
+    await setCheckoutReferral(buyer.rows[0].id, { code: referrerCode.code.toLowerCase(), source: "LINK" });
+    await expect(setCheckoutReferral(buyer.rows[0].id, { code: otherCode.code, source: "MANUAL" })).rejects.toThrow("REMOVE_EXISTING_REFERRAL_FIRST");
+    await removeCheckoutReferral(buyer.rows[0].id);
+    await setCheckoutReferral(buyer.rows[0].id, { code: referrerCode.code, source: "MANUAL" });
+
+    const referralRule = await getReferralPricingRule(client, buyer.rows[0].id, ["referral-line"]);
+    expect(referralRule).toMatchObject({
+      kind: "REFERRAL",
+      reduction: { kind: "PERCENTAGE", value: 500 },
+      maximumReductionFils: 5_000,
+      minimumMerchandiseFils: 20_000,
+    });
+    const referralQuote = calculatePricingQuote({
+      lines: [{ lineId: "referral-line", unitBaseFils: 100_000, quantity: 1 }],
+      sales: [],
+      coupons: [],
+      referral: referralRule,
+      shippingFils: 3_000,
+      taxFils: 0,
+    });
+    expect(referralQuote).toMatchObject({ referralFils: 5_000, merchandiseNetFils: 95_000, totalFils: 98_000 });
+    const terms = await client.execute<{ id: string }>(
+      "INSERT INTO terms_document(kind,version,language,title,body,content_hash,published_at) VALUES('TERMS','referral-v0.2','en','Referral terms','Referral terms','referral-v02',now()) RETURNING id",
+    );
+    const order = await client.execute<{ id: string }>(
+      `INSERT INTO shop_order(account_id,status,payment_status,fulfillment_status,payment_method,merchandise_fils,delivery_fils,discount_fils,wallet_tender_fils,external_due_fils,collected_fils,quote_snapshot,recipient_snapshot,delivery_snapshot,terms_document_id)
+       VALUES($1,'CONFIRMED','UNPAID','UNFULFILLED','COD',100000,3000,5000,20000,78000,0,'{}','{}','{}',$2) RETURNING id`,
+      [buyer.rows[0].id, terms.rows[0].id],
+    );
+    const reward = await lockOrderAttribution(client, {
+      buyerAccountId: buyer.rows[0].id,
+      orderId: order.rows[0].id,
+      buyerDiscountFils: 5_000,
+      qualifyingMerchandiseFils: 95_000,
+    });
+    expect(reward).toMatchObject({ rewardFils: 1_900, status: "PENDING" });
+    expect(await qualifyReferralReward(client, order.rows[0].id)).toBe(false);
+    await client.execute("UPDATE shop_order SET status='COMPLETED',payment_status='PAID',fulfillment_status='DELIVERED',collected_fils=external_due_fils WHERE id=$1", [order.rows[0].id]);
+    expect(await qualifyReferralReward(client, order.rows[0].id)).toBe(true);
+    expect(await qualifyReferralReward(client, order.rows[0].id)).toBe(false);
+    expect(await getWalletSummary(referrer.rows[0].id)).toMatchObject({ walletAvailableFils: 1_900 });
+    await reverseReferralReward(client, order.rows[0].id, "FULL_REFUND");
+    expect(await getWalletSummary(referrer.rows[0].id)).toMatchObject({ walletAvailableFils: 0 });
   });
 
   it("holds oldest wallet lots once and restores the original provenance after capture", async () => {
