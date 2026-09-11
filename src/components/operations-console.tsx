@@ -6,6 +6,7 @@ import{ReferralOperations,type ReferralOperationsData}from"@/components/referral
 import{ReviewOperations,type ReviewQueueItem}from"@/components/review-operations";
 import{PayoutOperations,VerificationOperations,type PayoutQueue,type VerificationQueue}from"@/components/verification-operations";
 import{CampaignOperations,type NotificationCampaign}from"@/components/campaign-operations";
+import{AnalyticsDashboard,type OperationalDashboard}from"@/components/analytics-dashboard";
 
 type RecordRow=Record<string,unknown>;
 type Props={
@@ -17,6 +18,7 @@ type Props={
   verification:VerificationQueue;
   payouts:PayoutQueue;
   notificationCampaigns:NotificationCampaign[];
+  analytics:OperationalDashboard|null;
   canEditCatalog:boolean;canAdjustInventory:boolean;canInviteStaff:boolean;
   canManagePromotions:boolean;
   canModerateReviews:boolean;
@@ -32,9 +34,10 @@ export function OperationsConsole(props:Props){
   async function run(action:()=>Promise<unknown>){try{const result=await action();setMessage(`Saved: ${JSON.stringify(result)}`);location.reload();}catch(error){setMessage(error instanceof Error?error.message:"Request failed");}}
   return <>
     <nav className="section-nav" aria-label="Operations sections">
-      {[["catalog","Products"],["inventory","Inventory"],["customers","Customers"],["promotions","Promotions"],["campaigns","Campaigns"],["referrals","Referrals"],["reviews","Reviews"],["verification","Verification"],["payouts","Payouts"],["finance","Finance"],["notifications","Notifications"],["audits","Audits"],["staff","Staff"]].map(([id,label])=><a key={id} href={`#${id}`}>{label}</a>)}
+      {[["analytics","Analytics"],["catalog","Products"],["inventory","Inventory"],["customers","Customers"],["promotions","Promotions"],["campaigns","Campaigns"],["referrals","Referrals"],["reviews","Reviews"],["verification","Verification"],["payouts","Payouts"],["finance","Finance"],["notifications","Notifications"],["audits","Audits"],["staff","Staff"]].map(([id,label])=><a key={id} href={`#${id}`}>{label}</a>)}
     </nav>
     <p className="operation-message" aria-live="polite">{message}</p>
+    <AnalyticsDashboard dashboard={props.analytics}/>
 
     <section id="catalog"><h2>Products & variants / المنتجات والخيارات</h2><div className="list">{props.products.map(product=><article key={String(product.id)}><div><strong>{String(product.name_en)} / {String(product.name_ar)}</strong><small>{String(product.slug)} · {String(product.status)} · {Array.isArray(product.variants)?product.variants.length:0} SKU</small></div><span>{money(product.base_price_fils)}</span>{props.canEditCatalog?<form action={form=>run(()=>mutate(`/api/v1/admin/catalog/products/${product.id}`,"PATCH",{nameEn:form.get("nameEn"),nameAr:form.get("nameAr"),basePriceFils:Number(form.get("price")),status:form.get("status"),featured:form.get("featured")==="on"}))}><input name="nameEn" defaultValue={String(product.name_en)} required/><input name="nameAr" defaultValue={String(product.name_ar)} required/><input name="price" type="number" min="0" defaultValue={Number(product.base_price_fils)} required/><select name="status" defaultValue={String(product.status)}><option>DRAFT</option><option>ACTIVE</option><option>HIDDEN</option><option>ARCHIVED</option></select><label className="check"><input name="featured" type="checkbox" defaultChecked={Boolean(product.featured)}/> Featured</label><button className="secondary">Save product</button></form>:null}</article>)}</div></section>
 
