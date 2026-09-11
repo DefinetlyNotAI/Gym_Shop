@@ -28,7 +28,7 @@ export function AuthPanel({terms}:{terms:{id:string;version:string;title:string}
     if(response.ok&&mode==="login")location.reload();
   }
   return <section className="panel">
-    <div className="tabs"><button onClick={()=>setMode("login")}>Sign in / دخول</button><button onClick={()=>setMode("register")}>Create account / حساب جديد</button></div>
+    <div className="tabs"><button aria-pressed={mode==="login"} onClick={()=>setMode("login")}>Sign in / دخول</button><button aria-pressed={mode==="register"} onClick={()=>setMode("register")}>Create account / حساب جديد</button></div>
     <form action={submit}>
       {mode==="register"?<label>Name / الاسم<input name="name" required minLength={2}/></label>:null}
       <label>Email / البريد<input name="email" type="email" required/></label>
