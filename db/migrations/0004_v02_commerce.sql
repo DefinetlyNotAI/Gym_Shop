@@ -295,6 +295,79 @@ CREATE TABLE referral_reward_event (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE product_review (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  public_id text NOT NULL UNIQUE DEFAULT ('rev_' || encode(gen_random_bytes(8),'hex')),
+  account_id uuid NOT NULL REFERENCES account(id),
+  order_id uuid NOT NULL REFERENCES shop_order(id),
+  order_line_id uuid NOT NULL REFERENCES order_line(id),
+  product_id uuid NOT NULL REFERENCES product(id),
+  variant_id uuid NOT NULL REFERENCES product_variant(id),
+  status text NOT NULL CHECK (status IN ('PENDING','PUBLISHED','REJECTED','HIDDEN')),
+  current_version integer NOT NULL DEFAULT 1 CHECK (current_version > 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  edited_at timestamptz,
+  deleted_at timestamptz,
+  UNIQUE (order_id, product_id)
+);
+
+CREATE TABLE review_version (
+  review_id uuid NOT NULL REFERENCES product_review(id),
+  version integer NOT NULL CHECK (version > 0),
+  rating smallint NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  body text NOT NULL CHECK (length(body) BETWEEN 10 AND 5000),
+  fit text CHECK (fit IS NULL OR fit IN ('SMALL','TRUE','LARGE')),
+  quality_rating smallint CHECK (quality_rating IS NULL OR quality_rating BETWEEN 1 AND 5),
+  comfort_rating smallint CHECK (comfort_rating IS NULL OR comfort_rating BETWEEN 1 AND 5),
+  media_ids uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
+  classifier_outcome text NOT NULL CHECK (classifier_outcome IN ('ACCEPTABLE','FLAGGED','UNCERTAIN','UNAVAILABLE')),
+  classifier_version text NOT NULL,
+  classifier_reasons jsonb NOT NULL DEFAULT '[]'::jsonb,
+  change_characters integer NOT NULL DEFAULT 0 CHECK (change_characters >= 0),
+  change_percent numeric(8,3) NOT NULL DEFAULT 0 CHECK (change_percent >= 0),
+  approved_badge boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (review_id, version)
+);
+
+CREATE TABLE review_moderation (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  review_id uuid NOT NULL REFERENCES product_review(id),
+  version integer NOT NULL,
+  decision text NOT NULL CHECK (decision IN ('APPROVE','REJECT','HIDE','CUSTOMER_DELETE')),
+  reason text NOT NULL,
+  actor_id uuid REFERENCES account(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (review_id, version) REFERENCES review_version(review_id, version)
+);
+
+CREATE TABLE review_vote (
+  review_id uuid NOT NULL REFERENCES product_review(id) ON DELETE CASCADE,
+  account_id uuid NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (review_id, account_id)
+);
+
+CREATE TABLE review_report (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  review_id uuid NOT NULL REFERENCES product_review(id),
+  account_id uuid NOT NULL REFERENCES account(id),
+  reason text NOT NULL CHECK (reason IN ('SPAM','OFFENSIVE','PERSONAL_INFO','IRRELEVANT','OTHER')),
+  details text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (review_id, account_id)
+);
+
+CREATE TABLE review_weekly_reward (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES account(id),
+  week_start date NOT NULL,
+  review_id uuid NOT NULL UNIQUE REFERENCES product_review(id),
+  milli_points integer NOT NULL DEFAULT 10000 CHECK (milli_points > 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (account_id, week_start)
+);
+
 INSERT INTO app_setting(key,value)
 VALUES
   ('referrals.link_retention_days','30'::jsonb),
@@ -305,11 +378,14 @@ VALUES
 
 INSERT INTO permission(id,domain,action,sensitive)
 VALUES ('promotions.manage','promotions','manage',false),
-       ('referrals.manage','referrals','manage',true);
+       ('referrals.manage','referrals','manage',true),
+       ('reviews.moderate','reviews','moderate',true);
 
 INSERT INTO role_permission(role_id,permission_id)
 VALUES ('ADMIN','promotions.manage'),('SUPER_ADMIN','promotions.manage'),('CTO','promotions.manage'),
        ('ADMIN','referrals.manage'),('SUPER_ADMIN','referrals.manage'),('CTO','referrals.manage');
+INSERT INTO role_permission(role_id,permission_id)
+VALUES ('SUPPORT_AGENT','reviews.moderate'),('ADMIN','reviews.moderate'),('SUPER_ADMIN','reviews.moderate'),('CTO','reviews.moderate');
 
 INSERT INTO schema_migration(name) VALUES ('0004_v02_commerce.sql');
 

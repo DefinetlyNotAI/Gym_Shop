@@ -40,6 +40,13 @@ import {
   setCheckoutReferral,
 } from "@/lib/referrals/service";
 import {
+  editReview,
+  listProductReviews,
+  moderateReview,
+  submitReview,
+  voteHelpful,
+} from "@/lib/reviews/service";
+import {
   awardDeliveryPoints,
   captureWalletHold,
   convertPoints,
@@ -187,6 +194,75 @@ describe("v0.2 release journeys", () => {
     expect(await getWalletSummary(referrer.rows[0].id)).toMatchObject({ walletAvailableFils: 1_900 });
     await reverseReferralReward(client, order.rows[0].id, "FULL_REFUND");
     expect(await getWalletSummary(referrer.rows[0].id)).toMatchObject({ walletAvailableFils: 0 });
+  });
+
+  it("publishes eligible reviews, preserves edits, moderates versions, and grants one weekly reward", async () => {
+    const buyer = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('review-buyer@v02.test','hash','Review Buyer','ACTIVE') RETURNING id",
+    );
+    const voter = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('review-voter@v02.test','hash','Review Voter','ACTIVE') RETURNING id",
+    );
+    const moderator = await client.execute<{ id: string }>(
+      "INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('review-moderator@v02.test','hash','Review Moderator','ACTIVE') RETURNING id",
+    );
+    const terms = await client.execute<{ id: string }>(
+      "INSERT INTO terms_document(kind,version,language,title,body,content_hash,published_at) VALUES('TERMS','review-v0.2','en','Review terms','Review terms','review-v02',now()) RETURNING id",
+    );
+    const product = await client.execute<{ id: string }>(
+      "INSERT INTO product(slug,name_en,name_ar,product_type,status,base_price_fils) VALUES('review-product','Review product','منتج المراجعة','equipment','ACTIVE',30000) RETURNING id",
+    );
+    const variant = await client.execute<{ id: string }>(
+      "INSERT INTO product_variant(product_id,sku) VALUES($1,'REVIEW-001') RETURNING id",
+      [product.rows[0].id],
+    );
+    const order = await client.execute<{ id: string }>(
+      `INSERT INTO shop_order(account_id,status,payment_status,fulfillment_status,payment_method,merchandise_fils,delivery_fils,external_due_fils,collected_fils,quote_snapshot,recipient_snapshot,delivery_snapshot,terms_document_id,delivered_at)
+       VALUES($1,'COMPLETED','PAID','DELIVERED','COD',30000,0,30000,30000,'{}','{}','{}',$2,now()-interval '25 hours') RETURNING id`,
+      [buyer.rows[0].id, terms.rows[0].id],
+    );
+    const orderLine = await client.execute<{ id: string }>(
+      `INSERT INTO order_line(order_id,variant_id,product_id,sku,name_snapshot,options_snapshot,quantity,unit_base_fils,unit_net_fils,line_base_fils,line_net_fils)
+       VALUES($1,$2,$3,'REVIEW-001','{}','{}',1,30000,30000,30000,30000) RETURNING id`,
+      [order.rows[0].id, variant.rows[0].id, product.rows[0].id],
+    );
+
+    const review = await submitReview(buyer.rows[0].id, {
+      orderLineId: orderLine.rows[0].id,
+      rating: 5,
+      body: "Excellent stable bench for daily training.",
+      fit: "TRUE",
+      qualityRating: 5,
+      comfortRating: 4,
+    });
+    expect(review).toMatchObject({ status: "PUBLISHED", weeklyRewardGranted: true });
+    await expect(submitReview(buyer.rows[0].id, {
+      orderLineId: orderLine.rows[0].id,
+      rating: 4,
+      body: "Trying to submit the same purchase twice.",
+    })).rejects.toThrow("REVIEW_ALREADY_EXISTS");
+    await expect(editReview(buyer.rows[0].id, review.publicId, { rating: 4, body: "A changed review that is still sufficiently detailed." })).rejects.toThrow("REVIEW_EDIT_COOLDOWN");
+    await expect(voteHelpful(buyer.rows[0].id, review.publicId)).rejects.toThrow("REVIEW_SELF_VOTE_DENIED");
+    expect(await voteHelpful(voter.rows[0].id, review.publicId)).toMatchObject({ helpful: true, count: 1 });
+    expect(await voteHelpful(voter.rows[0].id, review.publicId)).toMatchObject({ helpful: false, count: 0 });
+
+    await client.execute("UPDATE product_review SET edited_at=now()-interval '2 days' WHERE public_id=$1", [review.publicId]);
+    const edited = await editReview(buyer.rows[0].id, review.publicId, {
+      rating: 2,
+      body: "After extended use the frame started moving and the padding compressed significantly, so this needs another inspection.",
+    });
+    expect(edited).toMatchObject({ status: "PENDING", version: 2, approvedBadge: false });
+    await moderateReview(moderator.rows[0].id, review.publicId, { decision: "APPROVE", reason: "Purchase evidence and content reviewed" });
+    const listing = await listProductReviews("review-product", {});
+    expect(listing).toMatchObject({ count: 1, average: 2 });
+    expect(listing.reviews[0]).toMatchObject({ version: 2, approvedBadge: true, verifiedPurchase: true, helpfulCount: 0 });
+    const versions = await client.execute<{ version: number }>("SELECT version FROM review_version WHERE review_id=(SELECT id FROM product_review WHERE public_id=$1) ORDER BY version", [review.publicId]);
+    expect(versions.rows.map((entry) => entry.version)).toEqual([1, 2]);
+    const rewards = await client.execute<{ count: number; milli_points: string }>(
+      "SELECT count(*)::int AS count,max(milli_points)::text AS milli_points FROM review_weekly_reward WHERE account_id=$1",
+      [buyer.rows[0].id],
+    );
+    expect(rewards.rows[0]).toMatchObject({ count: 1, milli_points: "10000" });
   });
 
   it("holds oldest wallet lots once and restores the original provenance after capture", async () => {

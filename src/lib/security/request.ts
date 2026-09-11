@@ -11,7 +11,9 @@ const STOREFRONT_PREFIXES = [
   "/api/v1/account",
   "/api/v1/cart",
   "/api/v1/checkout",
+  "/api/v1/catalog/products/",
   "/api/v1/orders",
+  "/api/v1/reviews",
   "/api/v1/support",
 ];
 const SHARED_PATHS = new Set([
