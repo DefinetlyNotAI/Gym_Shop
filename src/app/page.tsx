@@ -12,7 +12,7 @@ type Rows={products?:Record<string,unknown>[];inventory?:Record<string,unknown>[
 
 export default async function Admin(){
   const actor=await getSession();
-  if(!actor)return <main className="page"><p className="eyebrow"><T en="GYM SHOP STAFF" ar="موظفو جيم شوب"/></p><h1><T en="Operations sign in" ar="دخول العمليات"/></h1><StaffLogin/></main>;
+  if(!actor)return <main className="page auth-page"><p className="eyebrow"><T en="GYM SHOP STAFF" ar="موظفو جيم شوب"/></p><h1><T en="Operations sign in" ar="دخول العمليات"/></h1><StaffLogin/></main>;
   if(actor.role==="CUSTOMER")return <main className="page"><h1><T en="Staff access required" ar="يلزم تصريح موظف"/></h1><a href={process.env.STOREFRONT_ORIGIN??"https://example.com"}><T en="Return to customer store" ar="العودة إلى متجر العملاء"/></a></main>;
   if(actor.role==="DELIVERY_AGENT")redirect("/delivery");
 
