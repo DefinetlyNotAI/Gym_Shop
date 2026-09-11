@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type DeliveryWindow = {
   id: string;
@@ -55,12 +55,59 @@ export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zo
   const [simulationOutcome,setSimulationOutcome]=useState<"success"|"failure"|"pending">("success");
   const [couponCode,setCouponCode]=useState("");
   const [walletFils,setWalletFils]=useState(0);
+  const [referralCode,setReferralCode]=useState("");
+  const [referralApplied,setReferralApplied]=useState(false);
   const [pricingPreview,setPricingPreview]=useState<PricingPreview|null>(null);
   const [message, setMessage] = useState("");
   const selectedZone = useMemo(() => zones.find((zone) => zone.id === zoneId), [zoneId, zones]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const stored = JSON.parse(localStorage.getItem("gym-shop-referral") ?? "null") as { code?: string; expiresAt?: number } | null;
+        if (stored?.code && (stored.expiresAt ?? 0) > Date.now()) setReferralCode(stored.code);
+        else localStorage.removeItem("gym-shop-referral");
+      } catch {
+        localStorage.removeItem("gym-shop-referral");
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  async function applyReferral() {
+    if (!referralCode.trim()) return true;
+    const response = await fetch("/api/v1/checkout/referral", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: referralCode.trim(), source: localStorage.getItem("gym-shop-referral") ? "LINK" : "MANUAL" }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      setMessage(payload.error?.message ?? "Referral code could not be applied. / تعذر تطبيق رمز الإحالة.");
+      return false;
+    }
+    setReferralCode(payload.data.code);
+    setReferralApplied(true);
+    return true;
+  }
+
+  async function removeReferral() {
+    const response = await fetch("/api/v1/checkout/referral", { method: "DELETE" });
+    if (!response.ok && response.status !== 404) {
+      const payload = await response.json();
+      setMessage(payload.error?.message ?? "Referral code could not be removed.");
+      return;
+    }
+    localStorage.removeItem("gym-shop-referral");
+    setReferralCode("");
+    setReferralApplied(false);
+    setPricingPreview(null);
+    setMessage("Referral removed. / تمت إزالة الإحالة.");
+  }
+
   async function submit(form: FormData) {
     setMessage("Placing order… / جارٍ إنشاء الطلب…");
+    if (!referralApplied && !(await applyReferral())) return;
     const body = {
       paymentMethod,
       fulfillmentMode: mode,
@@ -162,6 +209,11 @@ export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zo
           <label>Area / المنطقة<input name="area" required minLength={2} /></label>
           <label>Street / الشارع<input name="street" required minLength={2} /></label>
           <label>Building / المبنى<input name="building" /></label>
+        </div>
+        <div className="form-grid">
+          <label>Referral code / رمز الإحالة<input value={referralCode} onChange={(event)=>{setReferralCode(event.target.value);setReferralApplied(false);setPricingPreview(null);}} minLength={6} maxLength={24}/></label>
+          <button className="secondary" type="button" onClick={applyReferral} disabled={!referralCode.trim()}>Apply referral / تطبيق الإحالة</button>
+          <button type="button" onClick={removeReferral} disabled={!referralCode.trim()}>Remove before replacing / أزل الرمز قبل استبداله</button>
         </div>
         <label>Notes / ملاحظات<textarea name="notes" maxLength={500} /></label>
         <div className="form-grid">
