@@ -439,6 +439,53 @@ CREATE TABLE wallet_payout_transition (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE marketing_subscription (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL UNIQUE REFERENCES account(id),
+  status text NOT NULL CHECK (status IN ('SUBSCRIBED','UNSUBSCRIBED')),
+  consent_source text NOT NULL,
+  consented_at timestamptz NOT NULL,
+  unsubscribed_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE restock_subscription (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL REFERENCES account(id),
+  variant_id uuid NOT NULL REFERENCES product_variant(id),
+  status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','COMPLETED','UNSUBSCRIBED')),
+  subscribed_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz,
+  UNIQUE (account_id,variant_id)
+);
+
+CREATE TABLE notification_campaign (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  public_id text NOT NULL UNIQUE DEFAULT ('cmp_' || encode(gen_random_bytes(8),'hex')),
+  name text NOT NULL,
+  subject text NOT NULL,
+  body text NOT NULL,
+  status text NOT NULL CHECK (status IN ('DRAFT','PREVIEWED','SCHEDULED','ACTIVE','PAUSED','CANCELLED','COMPLETED')),
+  audience_criteria jsonb NOT NULL DEFAULT '{"subscription":"newsletter"}'::jsonb,
+  template_version integer NOT NULL DEFAULT 1,
+  scheduled_at timestamptz,
+  created_by uuid NOT NULL REFERENCES account(id),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE campaign_recipient (
+  campaign_id uuid NOT NULL REFERENCES notification_campaign(id),
+  account_id uuid NOT NULL REFERENCES account(id),
+  status text NOT NULL DEFAULT 'SNAPSHOT' CHECK (status IN ('SNAPSHOT','QUEUED','SENT','FAILED','SUPPRESSED')),
+  event_id uuid UNIQUE REFERENCES domain_event_outbox(id),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (campaign_id,account_id)
+);
+
+INSERT INTO notification_template(event_type,channel,language,version,subject,body,allowed_variables)
+VALUES ('marketing.campaign.v1','EMAIL','en',1,'{{campaignSubject}}','{{campaignBody}}\n\nManage or unsubscribe from marketing in your Gym Shop account.',ARRAY['campaignSubject','campaignBody']),
+       ('inventory.variant.restocked.v1','EMAIL','en',1,'Your selected variant is back','The exact variant {{variantId}} is available again. Availability can change before checkout.',ARRAY['variantId']);
+
 INSERT INTO app_setting(key,value)
 VALUES ('verification.partner_marketing_gate','"UNCONFIGURED"'::jsonb),
        ('payout.provider','"UNCONFIGURED"'::jsonb);

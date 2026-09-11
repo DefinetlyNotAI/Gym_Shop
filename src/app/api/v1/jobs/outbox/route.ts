@@ -5,6 +5,7 @@ import { claimEvents, markDelivered, markFailed, type ClaimedEvent } from "@/lib
 import { finalizeDueDeletions, purgeClosedAttachments, purgeExpiredDeliveryProofs, queueDeletionReminders } from "@/lib/support/service";
 import { dispatchNotificationEvent } from "@/lib/notifications/dispatcher";
 import { reconcileExpiredCardOrders } from "@/lib/commerce/orders";
+import { dispatchDueCampaigns } from "@/lib/notifications/campaigns";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 50;
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
   }
 
   const workerId = randomUUID();
+  const campaigns = await dispatchDueCampaigns();
   const events = await claimEvents(workerId, config.OUTBOX_BATCH_SIZE);
   const retention = {
     expiredCardOrders: await reconcileExpiredCardOrders(),
@@ -50,5 +52,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return apiSuccess({ claimed: events.length, delivered, failed, retention });
+  return apiSuccess({ claimed: events.length, delivered, failed, retention, campaigns });
 }

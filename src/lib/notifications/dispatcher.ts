@@ -27,6 +27,8 @@ const eventChannels: Record<string, Channel> = {
   "privacy.account.deletion_requested.v1": "EMAIL",
   "privacy.account.deletion_reminder.v1": "EMAIL",
   "privacy.account.deletion_finalized.v1": "EMAIL",
+  "marketing.campaign.v1": "EMAIL",
+  "inventory.variant.restocked.v1": "EMAIL",
 };
 
 function interpolate(template: string, variables: Record<string, string>): string {
@@ -80,10 +82,12 @@ async function prepare(event: ClaimedEvent): Promise<Delivery[]> {
     if(category==="marketing"){
       const preference=await client.execute<{enabled:boolean}>("SELECT enabled FROM notification_preference WHERE account_id=$1 AND category=$2 AND channel=$3",[accountId,category,channel]);
       const consent=channel==="EMAIL"?await client.execute<{granted:boolean}>("SELECT granted FROM consent_event WHERE account_id=$1 AND purpose='MARKETING_EMAIL' ORDER BY occurred_at DESC LIMIT 1",[accountId]):null;
-      const allowed=account.rows[0]?.status==="ACTIVE"&&preference.rows[0]?.enabled!==false&&(channel!=="EMAIL"||consent?.rows[0]?.granted===true);
+      const subscription=await client.execute<{active:boolean}>("SELECT status='SUBSCRIBED' AS active FROM marketing_subscription WHERE account_id=$1",[accountId]);
+      const allowed=account.rows[0]?.status==="ACTIVE"&&preference.rows[0]?.enabled!==false&&subscription.rows[0]?.active===true&&(channel!=="EMAIL"||consent?.rows[0]?.granted===true);
       if(!allowed){
         const suppressed=await client.execute<{id:string}>(`INSERT INTO notification(event_id,recipient_id,channel,category,entity_type,entity_id,template_id,status,permanent_failure,failure_code) VALUES($1,$2,$3,$4,$5,$6,$7,'SUPPRESSED',true,'PREFERENCE_OR_STATUS') ON CONFLICT(event_id,recipient_id,channel) DO UPDATE SET updated_at=notification.updated_at RETURNING id`,[event.id,accountId,channel,category,event.aggregate_type,event.aggregate_id,selected.id]);
         await client.execute("INSERT INTO notification_attempt(notification_id,attempt_number,result,failure_code) VALUES($1,1,'SUPPRESSED','PREFERENCE_OR_STATUS') ON CONFLICT DO NOTHING",[suppressed.rows[0].id]);
+        if(event.aggregate_type==="notification_campaign")await client.execute("UPDATE campaign_recipient SET status='SUPPRESSED',updated_at=now() WHERE event_id=$1",[event.id]);
         return[];
       }
     }
@@ -96,6 +100,9 @@ async function prepare(event: ClaimedEvent): Promise<Delivery[]> {
       pinPurpose: event.payload.purpose === "PICKUP" ? "pickup" : "delivery",
       code: secret?.token ?? "",
       actionUrl: secret?.actionUrl ?? "",
+      campaignSubject: typeof event.payload.campaignSubject === "string" ? event.payload.campaignSubject : "",
+      campaignBody: typeof event.payload.campaignBody === "string" ? event.payload.campaignBody : "",
+      variantId: typeof event.payload.variantId === "string" ? event.payload.variantId : "",
     };
     const subject = selected.subject ? interpolate(selected.subject, variables) : undefined;
     const body = interpolate(selected.body, variables);
@@ -142,6 +149,7 @@ async function recordResult(
       await client.execute("UPDATE phone_verification_request SET status='SENT' WHERE id=$1 AND status='QUEUED'", [delivery.aggregateId]);
     }
     if (result === "PERMANENT_FAILURE" && delivery.aggregateType === "phone_verification_request") await client.execute("UPDATE phone_verification_request SET status='FAILED' WHERE id=$1",[delivery.aggregateId]);
+    if(delivery.aggregateType==="notification_campaign")await client.execute("UPDATE campaign_recipient SET status=$2,updated_at=now() WHERE event_id=$1",[delivery.eventId,result==="SENT"||result==="DELIVERED"?"SENT":result==="PERMANENT_FAILURE"?"FAILED":"QUEUED"]);
   });
 }
 

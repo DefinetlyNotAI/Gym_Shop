@@ -55,6 +55,9 @@ import {
   submitVerification,
 } from "@/lib/verification/service";
 import { getPayoutAvailability, requestPayout } from "@/lib/payouts/service";
+import { adjustInventory } from "@/lib/inventory/operations";
+import { createCampaign as createNotificationCampaign, dispatchDueCampaigns, scheduleCampaign } from "@/lib/notifications/campaigns";
+import { subscribeNewsletter, subscribeRestock, unsubscribeNewsletter } from "@/lib/notifications/subscriptions";
 import {
   awardDeliveryPoints,
   captureWalletHold,
@@ -351,6 +354,29 @@ describe("v0.2 release journeys", () => {
       [application.publicId],
     );
     expect(cooldown.rows[0].exact).toBe(true);
+  });
+
+  it("deduplicates exact-variant restock events and snapshots only newsletter opt-ins", async () => {
+    const account = await client.execute<{ id: string }>("INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('subscriptions@v02.test','hash','Subscriber','ACTIVE') RETURNING id");
+    const actor = await client.execute<{ id: string }>("INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('campaigns@v02.test','hash','Campaign Operator','ACTIVE') RETURNING id");
+    const product = await client.execute<{ id: string }>("INSERT INTO product(slug,name_en,name_ar,product_type,status,base_price_fils) VALUES('subscription-product','Subscription Product','منتج','Equipment','ACTIVE',10000) RETURNING id");
+    const first = await client.execute<{ id: string }>("INSERT INTO product_variant(product_id,sku,option_values) VALUES($1,'SUB-A','{}') RETURNING id",[product.rows[0].id]);
+    const second = await client.execute<{ id: string }>("INSERT INTO product_variant(product_id,sku,option_values) VALUES($1,'SUB-B','{\"size\":\"B\"}') RETURNING id",[product.rows[0].id]);
+    await client.execute("INSERT INTO inventory_balance(variant_id,on_hand) VALUES($1,0),($2,0)",[first.rows[0].id,second.rows[0].id]);
+    await subscribeRestock(account.rows[0].id,first.rows[0].id);
+    await subscribeRestock(account.rows[0].id,first.rows[0].id);
+    await subscribeRestock(account.rows[0].id,second.rows[0].id);
+    await adjustInventory({variantId:first.rows[0].id,onHandDelta:1,reason:"RESTOCK",sourceReference:"sub-restock"},actor.rows[0].id);
+    await adjustInventory({variantId:first.rows[0].id,onHandDelta:1,reason:"RESTOCK",sourceReference:"sub-restock-more"},actor.rows[0].id);
+    const restock = await client.execute<{ active:number;completed:number;events:number }>("SELECT count(*) FILTER(WHERE status='ACTIVE')::int AS active,count(*) FILTER(WHERE status='COMPLETED')::int AS completed,(SELECT count(*)::int FROM domain_event_outbox WHERE event_type='inventory.variant.restocked.v1' AND payload->>'accountId'=$1) AS events FROM restock_subscription WHERE account_id=$1",[account.rows[0].id]);
+    expect(restock.rows[0]).toMatchObject({active:1,completed:1,events:1});
+    await subscribeNewsletter(account.rows[0].id,"HOMEPAGE_FORM");
+    const campaign = await createNotificationCampaign(actor.rows[0].id,{name:"Basic newsletter",subject:"New training gear",body:"A durable campaign body."});
+    await scheduleCampaign(campaign.public_id,new Date(Date.now()-1000));
+    expect(await dispatchDueCampaigns()).toMatchObject({campaigns:1,queued:1});
+    await unsubscribeNewsletter(account.rows[0].id);
+    const state = await client.execute<{subscription:string;consent:boolean;recipients:number}>("SELECT (SELECT status FROM marketing_subscription WHERE account_id=$1) AS subscription,(SELECT granted FROM consent_event WHERE account_id=$1 AND purpose='MARKETING_EMAIL' ORDER BY occurred_at DESC LIMIT 1) AS consent,(SELECT count(*)::int FROM campaign_recipient WHERE account_id=$1 AND status='QUEUED') AS recipients",[account.rows[0].id]);
+    expect(state.rows[0]).toMatchObject({subscription:"UNSUBSCRIBED",consent:false,recipients:1});
   });
 
   it("holds oldest wallet lots once and restores the original provenance after capture", async () => {
