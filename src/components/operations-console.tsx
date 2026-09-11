@@ -4,6 +4,7 @@ import{useState}from"react";
 import{PromotionOperations,type Campaign}from"@/components/promotion-operations";
 import{ReferralOperations,type ReferralOperationsData}from"@/components/referral-operations";
 import{ReviewOperations,type ReviewQueueItem}from"@/components/review-operations";
+import{PayoutOperations,VerificationOperations,type PayoutQueue,type VerificationQueue}from"@/components/verification-operations";
 
 type RecordRow=Record<string,unknown>;
 type Props={
@@ -12,9 +13,13 @@ type Props={
   campaigns:Campaign[];
   referrals:ReferralOperationsData;
   reviews:ReviewQueueItem[];
+  verification:VerificationQueue;
+  payouts:PayoutQueue;
   canEditCatalog:boolean;canAdjustInventory:boolean;canInviteStaff:boolean;
   canManagePromotions:boolean;
   canModerateReviews:boolean;
+  canReviewVerification:boolean;
+  canReviewPayouts:boolean;
 };
 
 async function mutate(path:string,method:string,body:unknown){const response=await fetch(path,{method,headers:{"content-type":"application/json"},body:JSON.stringify(body)});const payload=await response.json();if(!response.ok)throw new Error(payload.error?.code??"REQUEST_FAILED");return payload.data;}
@@ -25,7 +30,7 @@ export function OperationsConsole(props:Props){
   async function run(action:()=>Promise<unknown>){try{const result=await action();setMessage(`Saved: ${JSON.stringify(result)}`);location.reload();}catch(error){setMessage(error instanceof Error?error.message:"Request failed");}}
   return <>
     <nav className="section-nav" aria-label="Operations sections">
-      {[["catalog","Products"],["inventory","Inventory"],["customers","Customers"],["promotions","Promotions"],["referrals","Referrals"],["reviews","Reviews"],["finance","Finance"],["notifications","Notifications"],["audits","Audits"],["staff","Staff"]].map(([id,label])=><a key={id} href={`#${id}`}>{label}</a>)}
+      {[["catalog","Products"],["inventory","Inventory"],["customers","Customers"],["promotions","Promotions"],["referrals","Referrals"],["reviews","Reviews"],["verification","Verification"],["payouts","Payouts"],["finance","Finance"],["notifications","Notifications"],["audits","Audits"],["staff","Staff"]].map(([id,label])=><a key={id} href={`#${id}`}>{label}</a>)}
     </nav>
     <p className="operation-message" aria-live="polite">{message}</p>
 
@@ -45,5 +50,7 @@ export function OperationsConsole(props:Props){
     {props.canManagePromotions?<PromotionOperations campaigns={props.campaigns}/>:null}
     {props.canManagePromotions?<ReferralOperations referrals={props.referrals}/>:null}
     {props.canModerateReviews?<ReviewOperations reviews={props.reviews}/>:null}
+    {props.canReviewVerification?<VerificationOperations queue={props.verification}/>:null}
+    {props.canReviewPayouts?<PayoutOperations queue={props.payouts}/>:null}
   </>;
 }

@@ -8,6 +8,7 @@ import{SupportOperations}from"@/components/support-operations";
 import type{Campaign}from"@/components/promotion-operations";
 import type{ReferralOperationsData}from"@/components/referral-operations";
 import type{ReviewQueueItem}from"@/components/review-operations";
+import type{PayoutQueue,VerificationQueue}from"@/components/verification-operations";
 import{apiGet,getSession}from"@/lib/api";
 
 export const dynamic="force-dynamic";
@@ -26,10 +27,12 @@ export default async function Admin(){
   const canFinance=["CTO","SUPER_ADMIN","FINANCE_STAFF"].includes(actor.role);
   const canNotifications=["CTO","SUPER_ADMIN","ADMIN"].includes(actor.role);
   const canPromotions=["CTO","SUPER_ADMIN","ADMIN"].includes(actor.role);
+  const canReviewVerification=["CTO","SUPER_ADMIN","ADMIN"].includes(actor.role);
+  const canReviewPayouts=["CTO","SUPER_ADMIN","FINANCE_STAFF"].includes(actor.role);
   const canStaff=["CTO","SUPER_ADMIN"].includes(actor.role);
   const platform=await apiGet<{simulation:boolean}>("/api/v1/platform",true);
 
-  const[orders,zones,tickets,products,inventory,customers,finance,templates,audits,staff,campaigns,referrals,reviews]=await Promise.all([
+  const[orders,zones,tickets,products,inventory,customers,finance,templates,audits,staff,campaigns,referrals,reviews,verification,payouts]=await Promise.all([
     canFulfill?apiGet<Rows>("/api/v1/admin/orders",true):null,
     canFulfill?apiGet<Rows>("/api/v1/admin/delivery/zones",true):null,
     canSupport?apiGet<Rows>("/api/v1/admin/support/tickets",true):null,
@@ -43,6 +46,8 @@ export default async function Admin(){
     canPromotions?apiGet<Campaign[]>("/api/v1/admin/promotions",true):null,
     canPromotions?apiGet<ReferralOperationsData>("/api/v1/admin/referrals",true):null,
     canSupport?apiGet<ReviewQueueItem[]>("/api/v1/admin/reviews",true):null,
+    canReviewVerification?apiGet<VerificationQueue>("/api/v1/admin/verification",true):null,
+    canReviewPayouts?apiGet<PayoutQueue>("/api/v1/admin/finance/payouts",true):null,
   ]);
 
   return <main className="page">
@@ -52,6 +57,6 @@ export default async function Admin(){
     {canFulfill?<section id="orders"><h2>Orders & logistics / الطلبات واللوجستيات</h2><div className="list">{(orders?.orders??[]).map(order=><article key={String(order.public_id)}><strong>{String(order.public_id)}</strong><span>{String(order.fulfillment_status)} · {String(order.payment_status)}</span><span>{(Number(order.external_due_fils)/1000).toFixed(3)} JOD</span><OrderActions publicId={String(order.public_id)} fulfillmentStatus={String(order.fulfillment_status)} simulation={platform?.simulation}/></article>)}</div></section>:null}
     {canSupport?<SupportOperations initialTickets={tickets?.tickets??[]}/>:null}
     {canFulfill?<section id="delivery"><h2>Delivery configuration / إعداد التوصيل</h2><div className="list">{(zones?.zones??[]).map(zone=><article key={String(zone.id)}><strong>{String(zone.name_en)} / {String(zone.name_ar)}</strong><span>{Number(zone.fee_fils)/1000} JOD</span><span>{zone.policy_reviewed?"Reviewed":"Blocked"}</span></article>)}</div></section>:null}
-    <OperationsConsole products={products?.products??[]} inventory={inventory?.inventory??[]} customers={customers?.customers??[]} staff={staff?.staff??[]} refunds={finance?.refunds??[]} cash={finance?.cash??[]} templates={templates?.templates??[]} audits={audits?.events??[]} campaigns={campaigns??[]} referrals={referrals??{codes:[],rewards:[]}} reviews={reviews??[]} canEditCatalog={canCatalog} canAdjustInventory={canAdjustInventory} canInviteStaff={actor.role==="CTO"} canManagePromotions={canPromotions} canModerateReviews={canSupport}/>
+    <OperationsConsole products={products?.products??[]} inventory={inventory?.inventory??[]} customers={customers?.customers??[]} staff={staff?.staff??[]} refunds={finance?.refunds??[]} cash={finance?.cash??[]} templates={templates?.templates??[]} audits={audits?.events??[]} campaigns={campaigns??[]} referrals={referrals??{codes:[],rewards:[]}} reviews={reviews??[]} verification={verification??{applications:[]}} payouts={payouts??{payouts:[],provider:{available:false,code:"PAYOUT_PROVIDER_UNAVAILABLE",reason:"Business CliQ provider is not configured."}}} canEditCatalog={canCatalog} canAdjustInventory={canAdjustInventory} canInviteStaff={actor.role==="CTO"} canManagePromotions={canPromotions} canModerateReviews={canSupport} canReviewVerification={canReviewVerification} canReviewPayouts={canReviewPayouts}/>
   </main>;
 }
