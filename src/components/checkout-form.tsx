@@ -42,6 +42,9 @@ type PricingPreview = {
   deliveryFils: number;
   taxFils: number;
   totalFils: number;
+  walletAvailableFils: number;
+  walletTenderFils: number;
+  externalDueFils: number;
   rejections: { ruleId: string; code: string }[];
 };
 
@@ -51,6 +54,7 @@ export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zo
   const [paymentMethod, setPaymentMethod] = useState<"CARD" | "COD">("CARD");
   const [simulationOutcome,setSimulationOutcome]=useState<"success"|"failure"|"pending">("success");
   const [couponCode,setCouponCode]=useState("");
+  const [walletFils,setWalletFils]=useState(0);
   const [pricingPreview,setPricingPreview]=useState<PricingPreview|null>(null);
   const [message, setMessage] = useState("");
   const selectedZone = useMemo(() => zones.find((zone) => zone.id === zoneId), [zoneId, zones]);
@@ -76,6 +80,7 @@ export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zo
       idempotencyKey: crypto.randomUUID(),
       doorstepAuthorized: mode === "DELIVERY" && form.get("doorstep") === "on",
       couponCode: couponCode.trim() || undefined,
+      walletFils,
     };
     const response = await fetch("/api/v1/checkout", {
       method: "POST",
@@ -104,6 +109,7 @@ export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zo
     }
     const parameters = new URLSearchParams({ zoneId });
     if (couponCode.trim()) parameters.set("couponCode", couponCode.trim());
+    if (walletFils) parameters.set("walletFils", String(walletFils));
     const response = await fetch(`/api/v1/checkout/quote?${parameters}`, { headers: { accept: "application/json" } });
     const payload = await response.json();
     if (!response.ok) {
@@ -162,7 +168,8 @@ export function CheckoutForm({ zones, pickups, termsId, simulation=false }: { zo
           <label>Coupon code / رمز القسيمة<input name="couponCode" value={couponCode} onChange={(event)=>{setCouponCode(event.target.value);setPricingPreview(null);}} minLength={3} maxLength={64}/></label>
           <button className="secondary" type="button" onClick={previewCoupon} disabled={mode!=="DELIVERY"}>Preview price / معاينة السعر</button>
         </div>
-        {pricingPreview?<article className="notice"><strong>Authoritative quote / السعر المعتمد</strong><p>Merchandise {(pricingPreview.merchandiseFils/1000).toFixed(3)} JOD · discounts {(pricingPreview.discountFils/1000).toFixed(3)} JOD · delivery {(pricingPreview.deliveryFils/1000).toFixed(3)} JOD · tax {(pricingPreview.taxFils/1000).toFixed(3)} JOD</p><p><strong>Total {(pricingPreview.totalFils/1000).toFixed(3)} JOD</strong></p>{pricingPreview.rejections.length?<small>{pricingPreview.rejections.map((rejection)=>rejection.code).join(" · ")}</small>:null}</article>:null}
+        <label>Wallet tender in fils / الدفع من المحفظة بالفلس<input type="number" min="0" step="1" value={walletFils} onChange={(event)=>{setWalletFils(Number(event.target.value));setPricingPreview(null);}} /></label>
+        {pricingPreview?<article className="notice"><strong>Authoritative quote / السعر المعتمد</strong><p>Merchandise {(pricingPreview.merchandiseFils/1000).toFixed(3)} JOD · discounts {(pricingPreview.discountFils/1000).toFixed(3)} JOD · delivery {(pricingPreview.deliveryFils/1000).toFixed(3)} JOD · tax {(pricingPreview.taxFils/1000).toFixed(3)} JOD</p><p>Wallet {(pricingPreview.walletTenderFils/1000).toFixed(3)} JOD of {(pricingPreview.walletAvailableFils/1000).toFixed(3)} JOD available · external due {(pricingPreview.externalDueFils/1000).toFixed(3)} JOD</p><p><strong>Total {(pricingPreview.totalFils/1000).toFixed(3)} JOD</strong></p>{pricingPreview.rejections.length?<small>{pricingPreview.rejections.map((rejection)=>rejection.code).join(" · ")}</small>:null}</article>:null}
         <label>
           Payment / الدفع
           <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as "CARD" | "COD")}>
