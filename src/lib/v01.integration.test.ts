@@ -79,10 +79,15 @@ describe("v0.1 operational journeys", () => {
     await confirmLocalCardPayment(buyer.id, card.orderId, card.paymentReference!);
     expect((await confirmLocalCardPayment(buyer.id, card.orderId, card.paymentReference!)).replayed).toBe(true);
     await cancelOrder(buyer.id, card.orderId);
+    await cancelOrder(buyer.id, card.orderId);
+    expect(await row("SELECT count(*)::int AS count FROM refund WHERE order_id=(SELECT id FROM shop_order WHERE public_id=$1)", [card.orderId])).toMatchObject({ count: 1 });
     const refund = await row<{ id: string }>("SELECT id FROM refund WHERE order_id=(SELECT id FROM shop_order WHERE public_id=$1)", [card.orderId]);
     await executeRefund(refund.id, finance.id, "manual-test-refund-receipt");
     const refunded = await row<{ payment_status: string; refunded_fils: string; collected_fils: string }>("SELECT payment_status,refunded_fils,collected_fils FROM shop_order WHERE public_id=$1", [card.orderId]);
     expect(refunded).toMatchObject({ payment_status: "REFUNDED", refunded_fils: refunded.collected_fils });
+    await cancelOrder(buyer.id, card.orderId);
+    expect(await row("SELECT payment_status FROM shop_order WHERE public_id=$1", [card.orderId])).toMatchObject({ payment_status: "REFUNDED" });
+    expect(await row("SELECT count(*)::int AS count FROM refund WHERE order_id=(SELECT id FROM shop_order WHERE public_id=$1)", [card.orderId])).toMatchObject({ count: 1 });
 
     await addCartLine(buyer.id, variant.id);
     const cod = await checkout(buyer.id, checkoutInput("COD", "cod-journey-00001"));
