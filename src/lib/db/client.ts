@@ -71,9 +71,11 @@ function parameterizedSql(statement: string, parameters: readonly unknown[]): SQ
     }
     const followingSql = fragments[index + 1] ?? "";
     const value = parameters[parameterIndex];
-    const driverValue = Array.isArray(value) && /^\s*::\s*[a-zA-Z_][\w.]*\s*\[\]/.test(followingSql)
-      ? postgresArrayLiteral(value)
-      : value;
+    // SQL-template arrays become expression lists, including invalid `()` for
+    // empty arrays. This compatibility API binds PostgreSQL arrays as one value,
+    // including parameters whose type is inferred by INSERT/COALESCE rather than
+    // an explicit cast. Values remain bound, never interpolated into SQL text.
+    const driverValue = Array.isArray(value) ? postgresArrayLiteral(value) : value;
     query.append(sql`${driverValue}`);
     query.append(sql.raw(followingSql));
   }

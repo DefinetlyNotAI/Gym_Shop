@@ -60,6 +60,11 @@ import { createCampaign as createNotificationCampaign, dispatchDueCampaigns, sch
 import { subscribeNewsletter, subscribeRestock, unsubscribeNewsletter } from "@/lib/notifications/subscriptions";
 import { getOperationalDashboard } from "@/lib/analytics/service";
 import { getFinanceOverview } from "@/lib/finance/service";
+import { createProduct, createTaxonomy } from "@/lib/commerce/catalog";
+import { createSizeGuide, editProduct, getStaffCatalog, publishProductMedia } from "@/lib/commerce/catalog-admin";
+import { acceptSimulatedUpload, createUpload } from "@/lib/media/service";
+import { createHash } from "node:crypto";
+import { GET as publicMediaGET } from "@/app/media/[id]/route";
 import { v02ReleaseReadiness } from "@/lib/platform/release-readiness";
 import {
   awardDeliveryPoints,
@@ -123,6 +128,61 @@ describe("v0.2 release journeys", () => {
       "SELECT (SELECT count(*)::int FROM account) AS accounts,(SELECT count(*)::int FROM referral_code WHERE active) AS codes",
     );
     expect(referralBackfill.rows[0].codes).toBe(referralBackfill.rows[0].accounts);
+  });
+
+  it("serves the complete staff catalog and publishes only owned, scanned gallery images", async () => {
+    const actor = (await client.execute<{ id: string }>("INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('catalog-ui@v02.test','hash','Catalog Manager','ACTIVE') RETURNING id")).rows[0].id;
+    const category = await createTaxonomy("category", { slug: "ui-training", nameEn: "Training", nameAr: "تدريب" }, actor);
+    const collection = await createTaxonomy("collection", { slug: "ui-essentials", nameEn: "Essentials", nameAr: "أساسيات" }, actor);
+    const guide = await createSizeGuide(actor, { name: "Training sizes", measurements: { unit: "cm", M: { chest: 98 } } });
+    const product = await createProduct({ slug: "ui-training-top", nameEn: "Training top", nameAr: "قميص تدريب", productType: "Apparel", basePriceFils: 18000, status: "DRAFT", options: [], variants: [{ sku: "UI-TOP-M", optionValues: {} }] }, actor);
+    await editProduct(product.id, actor, { categoryIds: [category.id], collectionIds: [collection.id], sizeGuideId: guide.id, descriptionEn: "Breathable fabric", variants: [] });
+    const escapedTags = ['comma, quote" and slash\\', "NULL", "{braces}"];
+    await editProduct(product.id, actor, { tags: escapedTags });
+    expect((await client.execute<{ tags: string[] }>("SELECT tags FROM product WHERE id=$1", [product.id])).rows[0].tags).toEqual(escapedTags);
+    await editProduct(product.id, actor, { tags: [] });
+    expect((await client.execute<{ tags: string[] }>("SELECT tags FROM product WHERE id=$1", [product.id])).rows[0].tags).toEqual([]);
+    const image = (await client.execute<{ id: string }>("INSERT INTO media_object(owner_type,owner_id,access_class,object_key,verified_mime,byte_size,sha256,scan_status) VALUES('ACCOUNT_UPLOAD',$1,'PRIVATE','private-catalog-image','image/png',20,$2,'CLEAN') RETURNING id", [actor, "a".repeat(64)])).rows[0].id;
+    const pdf = (await client.execute<{ id: string }>("INSERT INTO media_object(owner_type,owner_id,access_class,object_key,verified_mime,byte_size,sha256,scan_status) VALUES('ACCOUNT_UPLOAD',$1,'PRIVATE','private-catalog-pdf','application/pdf',20,$2,'CLEAN') RETURNING id", [actor, "b".repeat(64)])).rows[0].id;
+    const input = { productId: product.id, altEn: "Training top, front view", altAr: "قميص تدريب من الأمام", position: 0 };
+    await expect(publishProductMedia(actor, { ...input, mediaId: pdf })).rejects.toThrow("MEDIA_NOT_READY");
+    await client.execute("UPDATE media_object SET scan_status='VALIDATED' WHERE id=$1", [image]);
+    await expect(publishProductMedia(actor, { ...input, mediaId: image })).rejects.toThrow("MEDIA_NOT_READY");
+    await client.execute("UPDATE media_object SET scan_status='CLEAN' WHERE id=$1", [image]);
+    await expect(publishProductMedia("00000000-0000-4000-8000-000000000099", { ...input, mediaId: image })).rejects.toThrow("MEDIA_NOT_READY");
+    await publishProductMedia(actor, { ...input, mediaId: image });
+    const catalog = await getStaffCatalog(actor);
+    const saved = catalog.products.find((row) => row.id === product.id);
+    expect(saved).toMatchObject({ description_en: "Breathable fabric", categoryIds: [category.id], collectionIds: [collection.id], size_guide_id: guide.id, media: [{ id: image, altEn: input.altEn, altAr: input.altAr, position: 0 }] });
+    expect(saved?.variants).toMatchObject([{ sku: "UI-TOP-M", inventoryTracking: true }]);
+    expect(catalog.sizeGuides).toContainEqual({ id: guide.id, name: "Training sizes", measurements: { unit: "cm", M: { chest: 98 } } });
+    expect(JSON.stringify(catalog)).not.toContain("private-catalog");
+    expect(catalog.uploads.some((row) => row.id === pdf)).toBe(false);
+    await client.execute("UPDATE category SET active=false WHERE id=$1", [category.id]);
+    await client.execute("UPDATE collection SET active=false WHERE id=$1", [collection.id]);
+    const withInactive = await getStaffCatalog(actor);
+    expect(withInactive.categories).toContainEqual(expect.objectContaining({ id: category.id, active: false }));
+    expect(withInactive.collections).toContainEqual(expect.objectContaining({ id: collection.id, active: false }));
+    await editProduct(product.id, actor, { categoryIds: [], collectionIds: [], sizeGuideId: null });
+    expect((await getStaffCatalog(actor)).products.find((row) => row.id === product.id)).toMatchObject({ categoryIds: [], collectionIds: [], size_guide_id: null });
+  });
+
+  it("serves simulated public gallery bytes without a cross-origin redirect", async () => {
+    const previous = process.env.SIM_MODE;
+    process.env.SIM_MODE = "1";
+    try {
+      const actor = (await client.execute<{ id: string }>("INSERT INTO account(email_normalized,password_hash,display_name,status) VALUES('catalog-image-ui@v02.test','hash','Gallery Manager','ACTIVE') RETURNING id")).rows[0].id;
+      const product = (await createProduct({ slug: "ui-gallery-test", nameEn: "Gallery test", nameAr: "اختبار المعرض", productType: "Apparel", basePriceFils: 18000, options: [], variants: [{ sku: "UI-GALLERY-TEST", optionValues: {} }] }, actor)).id;
+      const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS5sAAAAASUVORK5CYII=", "base64");
+      const upload = await createUpload(actor, { mime: "image/png", byteSize: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+      await acceptSimulatedUpload(actor, upload.id, "image/png", bytes);
+      await publishProductMedia(actor, { productId: product, mediaId: upload.id, altEn: "Front view", altAr: "صورة أمامية", position: 0 });
+      const response = await publicMediaGET(new Request(`http://localhost:3000/media/${upload.id}`), { params: Promise.resolve({ id: upload.id }) });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("content-type")).toBe("image/png");
+      expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
+    } finally { if (previous === undefined) delete process.env.SIM_MODE; else process.env.SIM_MODE = previous; }
   });
 
   it("converts only whole point blocks under the Amman weekly quota and replays safely", async () => {

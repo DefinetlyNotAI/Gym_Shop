@@ -1,6 +1,30 @@
 import { z } from "zod";
 import { appendAudit } from "@/lib/audit/service";
-import { withTransaction } from "@/lib/db/client";
+import { withDatabaseClient, withTransaction } from "@/lib/db/client";
+
+/** Staff-safe editing data: no storage keys or other owners' uploads. */
+export async function getStaffCatalog(actorId: string) {
+  return withDatabaseClient(async (client) => {
+    const products = (await client.execute<{ id: string; [key: string]: unknown }>(`
+      SELECT product.id,product.slug,product.name_en,product.name_ar,
+        product.description_en,product.description_ar,product.product_type,
+        product.status,product.base_price_fils,product.featured,product.size_guide_id,
+        COALESCE((SELECT jsonb_agg(category_id ORDER BY primary_category DESC,category_id) FROM product_category WHERE product_id=product.id),'[]') AS "categoryIds",
+        COALESCE((SELECT jsonb_agg(collection_id ORDER BY collection_id) FROM product_collection WHERE product_id=product.id),'[]') AS "collectionIds",
+        COALESCE((SELECT jsonb_agg(jsonb_build_object('id',variant.id,'sku',variant.sku,'options',variant.option_values,
+          'enabled',variant.enabled,'purchasable',variant.purchasable,'inventoryTracking',variant.inventory_tracking,
+          'priceOverrideFils',variant.price_override_fils,'compareAtFils',variant.compare_at_fils,'barcode',variant.barcode,'weightGrams',variant.weight_grams) ORDER BY variant.sku)
+          FROM product_variant AS variant WHERE variant.product_id=product.id),'[]') AS variants,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object('id',media.id,'altEn',media.alt_en,'altAr',media.alt_ar,'position',media.position) ORDER BY media.position,media.id)
+          FROM media_object AS media WHERE media.owner_type='PRODUCT' AND media.owner_id=product.id AND media.access_class='PUBLIC' AND media.scan_status='CLEAN' AND media.deleted_at IS NULL),'[]') AS media
+      FROM product ORDER BY product.updated_at DESC,product.id`)).rows;
+    const categories = (await client.execute("SELECT id,slug,name_en,name_ar,active FROM category ORDER BY name_en,id")).rows;
+    const collections = (await client.execute("SELECT id,slug,name_en,name_ar,active FROM collection ORDER BY name_en,id")).rows;
+    const sizeGuides = (await client.execute("SELECT id,name,measurements FROM size_guide ORDER BY name,id")).rows;
+    const uploads = (await client.execute<{ id: string; [key: string]: unknown }>("SELECT id,verified_mime,scan_status FROM media_object WHERE owner_type='ACCOUNT_UPLOAD' AND owner_id=$1 AND deleted_at IS NULL AND verified_mime IN ('image/jpeg','image/png','image/webp') ORDER BY created_at DESC LIMIT 50", [actorId])).rows;
+    return { products, categories, collections, sizeGuides, uploads };
+  });
+}
 
 const sizeGuide = z.object({ name: z.string().min(2).max(100), measurements: z.record(z.string(), z.unknown()) });
 export async function createSizeGuide(actorId: string, raw: unknown) { const input = sizeGuide.parse(raw); return withTransaction(async (client) => { const row = (await client.execute<{ id: string }>("INSERT INTO size_guide(name,measurements) VALUES($1,$2::jsonb) RETURNING id", [input.name, JSON.stringify(input.measurements)])).rows[0]; await appendAudit(client, { actorId, action: "size_guide.created", targetType: "size_guide", targetId: row.id, domain: "catalog", after: input }); return row; }); }
@@ -33,4 +57,4 @@ export async function editProduct(productId: string, actorId: string, raw: unkno
 }
 
 const media = z.object({ mediaId: z.string().uuid(), productId: z.string().uuid(), altEn: z.string().min(1).max(300), altAr: z.string().min(1).max(300), position: z.number().int().min(0).max(100) });
-export async function publishProductMedia(actorId: string, raw: unknown) { const input = media.parse(raw); return withTransaction(async (client) => { const product = await client.execute("SELECT 1 FROM product WHERE id=$1", [input.productId]); if (!product.rowCount) throw new Error("PRODUCT_NOT_FOUND"); const updated = await client.execute("UPDATE media_object SET owner_type='PRODUCT',owner_id=$3,access_class='PUBLIC',alt_en=$4,alt_ar=$5,position=$6 WHERE id=$1 AND owner_type='ACCOUNT_UPLOAD' AND owner_id=$2 AND scan_status='CLEAN' AND deleted_at IS NULL", [input.mediaId, actorId, input.productId, input.altEn, input.altAr, input.position]); if (!updated.rowCount) throw new Error("MEDIA_NOT_READY"); await appendAudit(client, { actorId, action: "product.media.published", targetType: "media_object", targetId: input.mediaId, domain: "catalog", after: { productId: input.productId, position: input.position } }); return { published: true }; }); }
+export async function publishProductMedia(actorId: string, raw: unknown) { const input = media.parse(raw); return withTransaction(async (client) => { const product = await client.execute("SELECT 1 FROM product WHERE id=$1", [input.productId]); if (!product.rowCount) throw new Error("PRODUCT_NOT_FOUND"); const updated = await client.execute("UPDATE media_object SET owner_type='PRODUCT',owner_id=$3,access_class='PUBLIC',alt_en=$4,alt_ar=$5,position=$6 WHERE id=$1 AND owner_type='ACCOUNT_UPLOAD' AND owner_id=$2 AND scan_status='CLEAN' AND verified_mime IN ('image/jpeg','image/png','image/webp') AND deleted_at IS NULL", [input.mediaId, actorId, input.productId, input.altEn, input.altAr, input.position]); if (!updated.rowCount) throw new Error("MEDIA_NOT_READY"); await appendAudit(client, { actorId, action: "product.media.published", targetType: "media_object", targetId: input.mediaId, domain: "catalog", after: { productId: input.productId, position: input.position } }); return { published: true }; }); }
