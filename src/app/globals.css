@@ -1,4 +1,18 @@
 /* One semantic visual system: ivory surfaces, graphite text, sage actions. */
+.private-media-upload {
+  display: grid;
+  gap: 0.6rem;
+}
+.private-media-upload > label {
+  display: grid;
+  gap: 0.4rem;
+}
+.private-media-upload > button {
+  justify-self: start;
+}
+.private-media-upload small:empty {
+  display: none;
+}
 pre {
   max-width: 100%;
   overflow: auto;
