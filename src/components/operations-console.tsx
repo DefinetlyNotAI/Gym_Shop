@@ -32,7 +32,6 @@ type RecordRow = Record<string, unknown>;
 type Props = {
   section: string;
   analyticsQuery?: string;
-  products: RecordRow[];
   inventory: RecordRow[];
   customers: RecordRow[];
   staff: RecordRow[];
@@ -47,7 +46,6 @@ type Props = {
   payouts: PayoutQueue;
   notificationCampaigns: NotificationCampaign[];
   analytics: OperationalDashboard | null;
-  canEditCatalog: boolean;
   canAdjustInventory: boolean;
   canInviteStaff: boolean;
   canManagePromotions: boolean;
@@ -109,98 +107,6 @@ export function OperationsConsole(props: Props) {
       ) : null}
       {props.section === "payouts" && props.canReviewPayouts ? (
         <PayoutOperations queue={props.payouts} />
-      ) : null}
-
-      {props.section === "catalog" ? (
-        <section id="catalog">
-          <h2>Products & variants / المنتجات والخيارات</h2>
-          <div className="list">
-            {props.products.map((product) => (
-              <article key={String(product.id)}>
-                <div>
-                  <strong>
-                    {String(product.name_en)} / {String(product.name_ar)}
-                  </strong>
-                  <small>
-                    {String(product.slug)} · {String(product.status)} ·{" "}
-                    {Array.isArray(product.variants)
-                      ? product.variants.length
-                      : 0}{" "}
-                    SKU
-                  </small>
-                </div>
-                <span>{money(product.base_price_fils)}</span>
-                {props.canEditCatalog ? (
-                  <form
-                    action={(form) =>
-                      run(() =>
-                        mutate(
-                          `/api/v1/admin/catalog/products/${product.id}`,
-                          "PATCH",
-                          {
-                            nameEn: form.get("nameEn"),
-                            nameAr: form.get("nameAr"),
-                            basePriceFils: Number(form.get("price")),
-                            status: form.get("status"),
-                            featured: form.get("featured") === "on",
-                          },
-                        ),
-                      )
-                    }
-                  >
-                    <label>
-                      Name En
-                      <input
-                        name="nameEn"
-                        defaultValue={String(product.name_en)}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Name Ar
-                      <input
-                        name="nameAr"
-                        defaultValue={String(product.name_ar)}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Price
-                      <input
-                        name="price"
-                        type="number"
-                        min="0"
-                        defaultValue={Number(product.base_price_fils)}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Status
-                      <select
-                        name="status"
-                        defaultValue={String(product.status)}
-                      >
-                        <option>DRAFT</option>
-                        <option>ACTIVE</option>
-                        <option>HIDDEN</option>
-                        <option>ARCHIVED</option>
-                      </select>
-                    </label>
-                    <label className="check">
-                      <input
-                        name="featured"
-                        type="checkbox"
-                        defaultChecked={Boolean(product.featured)}
-                      />{" "}
-                      Featured
-                    </label>
-                    <button className="secondary">Save product</button>
-                  </form>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </section>
       ) : null}
 
       {props.section === "inventory" ? (

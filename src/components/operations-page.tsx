@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminTools } from "@/components/admin-tools";
+import {
+  CatalogWorkspace,
+  type CatalogData,
+} from "@/components/catalog-workspace";
 import { OperationsConsole } from "@/components/operations-console";
 import { OrderActions } from "@/components/order-actions";
 import { StaffLogin } from "@/components/staff-login";
@@ -105,7 +109,7 @@ export async function OperationsPage({
   const inventory = read<Rows>("/api/v1/admin/inventory");
   const tickets = read<Rows>("/api/v1/admin/support/tickets");
   const finance = read<Rows>("/api/v1/admin/finance/overview");
-  const products = read<Rows>("/api/v1/admin/catalog/products");
+  const products = read<CatalogData>("/api/v1/admin/catalog/products");
   const customers = read<Rows>("/api/v1/admin/customers");
   const staff = read<Rows>("/api/v1/admin/staff");
   const zones = read<Rows>("/api/v1/admin/delivery/zones");
@@ -221,6 +225,18 @@ export async function OperationsPage({
         </>
       ) : null}
       {section === "settings" ? <AdminTools /> : null}
+      {["catalog", "categories", "collections", "size-guides"].includes(
+        section,
+      ) && products ? (
+        <CatalogWorkspace
+          data={products}
+          view={section}
+          canEdit={["CTO", "SUPER_ADMIN", "ADMIN", "LOGISTICS_STAFF"].includes(
+            actor.role,
+          )}
+          storeOrigin={process.env.STOREFRONT_ORIGIN ?? "https://example.com"}
+        />
+      ) : null}
       {section === "orders" ? (
         <section id="orders">
           <h2>
@@ -302,10 +318,13 @@ export async function OperationsPage({
         "orders",
         "support",
         "delivery-settings",
+        "catalog",
+        "categories",
+        "collections",
+        "size-guides",
       ].includes(section) ? (
         <OperationsConsole
           section={section}
-          products={products?.products ?? []}
           inventory={inventory?.inventory ?? []}
           customers={customers?.customers ?? []}
           staff={staff?.staff ?? []}
@@ -333,7 +352,8 @@ export async function OperationsPage({
                 name: "Amazon Payment Services",
                 available: false,
                 code: "PAYOUT_PROVIDER_UNAVAILABLE",
-                reason: "APS wallet withdrawal capability and integration evidence are not verified.",
+                reason:
+                  "APS wallet withdrawal capability and integration evidence are not verified.",
               },
             }
           }
@@ -346,12 +366,6 @@ export async function OperationsPage({
             read<OperationalDashboard>("/api/v1/admin/analytics") ?? null
           }
           analyticsQuery={query.toString()}
-          canEditCatalog={[
-            "CTO",
-            "SUPER_ADMIN",
-            "ADMIN",
-            "LOGISTICS_STAFF",
-          ].includes(actor.role)}
           canAdjustInventory={[
             "CTO",
             "SUPER_ADMIN",

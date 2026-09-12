@@ -6,7 +6,11 @@ export type OperationsRoute = {
   description: string;
   descriptionAr: string;
   group:
-    "Workspace" | "Commerce" | "Growth" | "Trust & finance" | "Administration";
+    | "Workspace"
+    | "Commerce"
+    | "Growth"
+    | "Trust & finance"
+    | "Administration";
   roles: readonly string[];
   requests: readonly string[];
 };
@@ -80,6 +84,39 @@ export const operationsRoutes: readonly OperationsRoute[] = [
     group: "Commerce",
     roles: logistics,
     requests: ["/api/v1/admin/inventory"],
+  },
+  {
+    id: "categories",
+    href: "/categories",
+    title: "Categories",
+    titleAr: "الفئات",
+    description: "Organize products into clear, bilingual categories.",
+    descriptionAr: "تنظيم المنتجات في فئات واضحة باللغتين.",
+    group: "Commerce",
+    roles: logistics,
+    requests: ["/api/v1/admin/catalog/products"],
+  },
+  {
+    id: "collections",
+    href: "/collections",
+    title: "Collections",
+    titleAr: "المجموعات",
+    description: "Curated collections with their own customer-facing pages.",
+    descriptionAr: "مجموعات منتقاة بصفحات خاصة للعملاء.",
+    group: "Commerce",
+    roles: logistics,
+    requests: ["/api/v1/admin/catalog/products"],
+  },
+  {
+    id: "size-guides",
+    href: "/size-guides",
+    title: "Size guides",
+    titleAr: "أدلة المقاسات",
+    description: "Named measurements and units, assigned directly to products.",
+    descriptionAr: "قياسات ووحدات مسماة مرتبطة بالمنتجات مباشرة.",
+    group: "Commerce",
+    roles: logistics,
+    requests: ["/api/v1/admin/catalog/products"],
   },
   {
     id: "customers",
