@@ -33,13 +33,14 @@ export async function v02ReleaseReadiness(client: DatabaseClient) {
   const found = new Set(tables.rows.map((entry) => entry.table_name));
   const missingSoftwareEvidence = V02_TABLES.filter((table) => !found.has(table));
   const provider = await client.execute<{ value: unknown }>("SELECT value FROM app_setting WHERE key='payout.provider'");
-  const businessCliqProvider = getPayoutProviderStatus().available && provider.rows[0]?.value === "ACTIVE";
+  const payoutProvider = getPayoutProviderStatus();
+  const payoutProviderAvailable = payoutProvider.available && provider.rows[0]?.value === "ACTIVE";
   const softwareReady = missingSoftwareEvidence.length === 0;
   return {
     softwareReady,
     missingSoftwareEvidence,
-    businessCliqProvider,
-    activationReady: softwareReady && businessCliqProvider,
-    blockers: businessCliqProvider ? [] : ["BUSINESS_CLIQ_PROVIDER_UNAVAILABLE"],
+    payoutProviderAvailable,
+    activationReady: softwareReady && payoutProviderAvailable,
+    blockers: payoutProviderAvailable ? [] : [payoutProvider.code],
   };
 }

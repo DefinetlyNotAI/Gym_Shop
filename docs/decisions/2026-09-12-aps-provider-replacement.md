@@ -12,10 +12,10 @@ PAY-05 and WAL-04 retain all-source verified withdrawal eligibility, Finance app
 
 ## Change boundary
 
-This is a planning amendment, not a claim of live APS disbursement integration. Existing software still exposes the historical provider-specific readiness field/blocker until a separately verified runtime-contract migration replaces it. No credentials, external account or live financial operation were created.
+This selects APS but does not claim live APS disbursement integration. The subsequent runtime-contract migration replaces the old provider-specific readiness field/blocker with `payoutProviderAvailable` and `PAYOUT_PROVIDER_UNAVAILABLE`. Provider metadata and both customer/staff payout screens display Amazon Payment Services and the capability gap. No credentials, external account or live financial operation were created.
 
 `PLAN` is outside the three Git repositories and has no Git metadata. This decision record commits the amendment's intent and implementation boundary in the API repository; the canonical sibling edits cannot themselves be committed without moving the plan or creating a new repository, neither of which the user requested.
 
 ## Verification
 
-The active plan has no remaining old provider-name references (archived originals excluded). All 146 active local Markdown links resolve, and all 20 source hashes match `PLAN/reference/original-sha256.json`. Customer and admin worktrees remain unchanged. No production code changed in this planning amendment, so software tests/builds are not presented as new evidence for APS withdrawal support.
+The active plan has no remaining old provider-name references (archived originals excluded). All 146 active local Markdown links resolve, and all 20 source hashes match `PLAN/reference/original-sha256.json`. The initial planning amendment changed no production code. The subsequent runtime migration was tested red/green against the real migrated PGlite journey and independently reviewed; those checks verify accurate provider identity and fail-closed behavior, not actual APS withdrawal support.

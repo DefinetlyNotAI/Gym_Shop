@@ -3,6 +3,7 @@ import { requireCustomer } from "@/lib/auth/authorization";
 import { getCurrentAccount } from "@/lib/auth/session";
 import { getPayoutAvailability, requestPayout } from "@/lib/payouts/service";
 import { requireTrustedMutation } from "@/lib/security/request";
+import { getPayoutProviderStatus } from "@/lib/payouts/provider";
 
 export async function GET() {
   try {
@@ -20,6 +21,6 @@ export async function POST(request: Request) {
     return apiSuccess(await requestPayout(account.id, await request.json()), { status: 201 });
   } catch (error) {
     const code = error instanceof Error ? error.message : "PAYOUT_REQUEST_FAILED";
-    return apiError(code === "PAYOUT_PROVIDER_UNAVAILABLE" ? 503 : 422, { code, message: "Payout requests are unavailable until the business CliQ provider is configured and verified." });
+    return apiError(code === "PAYOUT_PROVIDER_UNAVAILABLE" ? 503 : 422, { code, message: getPayoutProviderStatus().reason });
   }
 }

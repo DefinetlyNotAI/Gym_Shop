@@ -314,7 +314,12 @@ describe("v0.2 release journeys", () => {
     expect(await customizeReferralCode(applicant.rows[0].id, "PARTNER_2026")).toMatchObject({ code: "PARTNER_2026" });
     await creditWalletLot(client, { accountId: applicant.rows[0].id, amountFils: 10_000, sourceType: "LOYALTY", sourceId: "pre-verification-loyalty", operationKey: "wallet:pre-verification-loyalty" });
     await creditWalletLot(client, { accountId: applicant.rows[0].id, amountFils: 20_000, sourceType: "REFERRAL", sourceId: "pre-verification-referral", operationKey: "wallet:pre-verification-referral" });
-    expect(await getPayoutAvailability(applicant.rows[0].id)).toMatchObject({ verified: true, withdrawableFils: 30_000, providerAvailable: false });
+    expect(await getPayoutAvailability(applicant.rows[0].id)).toMatchObject({
+      verified: true,
+      withdrawableFils: 30_000,
+      providerAvailable: false,
+      provider: { name: "Amazon Payment Services", available: false, code: "PAYOUT_PROVIDER_UNAVAILABLE" },
+    });
     await expect(requestPayout(applicant.rows[0].id, { destinationId: crypto.randomUUID(), amountFils: 25_000, idempotencyKey: "payout-provider-gated" })).rejects.toThrow("PAYOUT_PROVIDER_UNAVAILABLE");
     const noMutation = await client.execute<{ payouts: number; held: string }>(
       "SELECT (SELECT count(*)::int FROM wallet_payout WHERE account_id=$1) AS payouts,(SELECT COALESCE(sum(held_fils),0)::text FROM wallet_lot WHERE account_id=$1) AS held",
@@ -395,7 +400,7 @@ describe("v0.2 release journeys", () => {
     const dashboard = await getOperationalDashboard({id:account.rows[0].id,publicId:"staff",email:"finance@v02.test",displayName:"Finance",status:"ACTIVE",emailVerified:true,phoneVerified:true,role:"FINANCE_STAFF",sessionId:"session",authenticatedAt:new Date(),sessionKind:"NORMAL"},{from:"2035-01-01",to:"2035-02-01"});
     expect(dashboard.data.commerce).toEqual({revenueFils:35000,orders:1,aovFils:35000,units:2,pendingOrders:0});
     expect(dashboard.metadata.revenue).toContain("wallet ledger transfers are excluded");
-    expect(await v02ReleaseReadiness(client)).toEqual({ softwareReady:true, missingSoftwareEvidence:[], businessCliqProvider:false, activationReady:false, blockers:["BUSINESS_CLIQ_PROVIDER_UNAVAILABLE"] });
+    expect(await v02ReleaseReadiness(client)).toEqual({ softwareReady:true, missingSoftwareEvidence:[], payoutProviderAvailable:false, activationReady:false, blockers:["PAYOUT_PROVIDER_UNAVAILABLE"] });
   });
 
   it("does not activate payouts from an ACTIVE setting without a real provider", async () => {
@@ -407,9 +412,9 @@ describe("v0.2 release journeys", () => {
       expect(await v02ReleaseReadiness(client)).toEqual({
         softwareReady: true,
         missingSoftwareEvidence: [],
-        businessCliqProvider: false,
+        payoutProviderAvailable: false,
         activationReady: false,
-        blockers: ["BUSINESS_CLIQ_PROVIDER_UNAVAILABLE"],
+        blockers: ["PAYOUT_PROVIDER_UNAVAILABLE"],
       });
     } finally {
       await client.execute("UPDATE app_setting SET value=$1::jsonb WHERE key='payout.provider'", [

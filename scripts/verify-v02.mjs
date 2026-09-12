@@ -22,11 +22,7 @@ for (const [slice, files] of Object.entries(slices)) {
   failed ||= missing.length > 0;
 }
 
-const providerSource = await readFile(resolve("src/lib/payouts/provider.ts"), "utf8");
-if (!providerSource.includes("PAYOUT_PROVIDER_UNAVAILABLE") || !providerSource.includes("available: false")) {
-  process.stderr.write("R02-05: CliQ provider gate is not explicitly unavailable\n");
-  failed = true;
-} else process.stdout.write("External activation: BUSINESS_CLIQ_PROVIDER_UNAVAILABLE (expected blocker; not mocked)\n");
+process.stdout.write("APS wallet withdrawal activation requires verified beneficiary-disbursement capability; the real integration suite checks fail-closed readiness and no wallet holds.\n");
 
 const { client, raw } = await pgliteDatabase();
 try {
@@ -41,4 +37,4 @@ try {
 const test = spawnSync(process.execPath, [resolve("node_modules/vitest/vitest.mjs"), "run", "src/lib/v02.integration.test.ts", "src/lib/pricing/service.test.ts", "src/lib/wallet/service.test.ts", "src/lib/verification/service.test.ts", "src/lib/payouts/service.test.ts", "src/lib/notifications/subscriptions.test.ts", "src/lib/analytics/service.test.ts"], { stdio: "inherit" });
 if (test.status !== 0) failed = true;
 if (failed) process.exit(1);
-process.stdout.write("v0.2 software acceptance passed; activation remains blocked only by the real business CliQ provider dependency.\n");
+process.stdout.write("v0.2 software acceptance passed; this does not authorize APS wallet withdrawal activation.\n");
