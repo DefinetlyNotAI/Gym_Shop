@@ -1,4 +1,151 @@
-"use client";import{useState}from"react";
-export type NotificationCampaign={public_id:string;name:string;subject:string;body:string;status:string;scheduled_at:string|null;recipients:number;suppressed:number};
-async function mutate(path:string,body:unknown){const response=await fetch(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const payload=await response.json();if(!response.ok)throw new Error(payload.error?.code??"REQUEST_FAILED");location.reload();}
-export function CampaignOperations({campaigns}:{campaigns:NotificationCampaign[]}){const[message,setMessage]=useState("");async function run(work:()=>Promise<void>){try{await work();}catch(error){setMessage(error instanceof Error?error.message:"Campaign action failed");}}return <section id="campaigns"><h2>Newsletter campaigns</h2><p>Core audience: currently opted-in newsletter accounts. Consent and account state are checked again when delivery is attempted.</p><form className="panel form-grid" action={form=>run(()=>mutate("/api/v1/admin/notifications/campaigns",{name:form.get("name"),subject:form.get("subject"),body:form.get("body")}))}><input name="name" required placeholder="Campaign name"/><input name="subject" required placeholder="Email subject"/><textarea name="body" required minLength={5} placeholder="Campaign message"/><button>Create draft</button></form><p aria-live="polite">{message}</p><div className="list">{campaigns.map(item=><article key={item.public_id}><strong>{item.name} · {item.status}</strong><small>{item.recipients} recipients · {item.suppressed} suppressed</small><p>{item.subject}</p><div className="inline-actions"><button className="secondary" onClick={()=>run(()=>mutate(`/api/v1/admin/notifications/campaigns/${item.public_id}`,{action:"PREVIEW"}))}>Preview</button><button onClick={()=>run(()=>mutate(`/api/v1/admin/notifications/campaigns/${item.public_id}`,{action:"SCHEDULE",scheduledAt:new Date().toISOString()}))}>Schedule now</button><button className="secondary" onClick={()=>run(()=>mutate(`/api/v1/admin/notifications/campaigns/${item.public_id}`,{action:"PAUSE"}))}>Pause</button><button className="secondary" onClick={()=>run(()=>mutate(`/api/v1/admin/notifications/campaigns/${item.public_id}`,{action:"CANCEL"}))}>Cancel</button></div></article>)}</div></section>}
+"use client";
+import { useState } from "react";
+export type NotificationCampaign = {
+  public_id: string;
+  name: string;
+  subject: string;
+  body: string;
+  status: string;
+  scheduled_at: string | null;
+  recipients: number;
+  suppressed: number;
+};
+async function mutate(path: string, body: unknown) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error?.code ?? "REQUEST_FAILED");
+  location.reload();
+}
+export function CampaignOperations({
+  campaigns,
+}: {
+  campaigns: NotificationCampaign[];
+}) {
+  const [message, setMessage] = useState("");
+  async function run(work: () => Promise<void>) {
+    try {
+      await work();
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Campaign action failed",
+      );
+    }
+  }
+  return (
+    <section id="campaigns">
+      <h2>Newsletter campaigns</h2>
+      <p>
+        Core audience: currently opted-in newsletter accounts. Consent and
+        account state are checked again when delivery is attempted.
+      </p>
+      <details className="workflow-disclosure">
+        <summary>Create a newsletter draft</summary>
+        <form
+          className="form-grid"
+          action={(form) =>
+            run(() =>
+              mutate("/api/v1/admin/notifications/campaigns", {
+                name: form.get("name"),
+                subject: form.get("subject"),
+                body: form.get("body"),
+              }),
+            )
+          }
+        >
+          <label>
+            Campaign name
+            <input name="name" required placeholder="Campaign name" />
+          </label>
+          <label>
+            Email subject
+            <input name="subject" required placeholder="Email subject" />
+          </label>
+          <label>
+            Campaign message
+            <textarea
+              name="body"
+              required
+              minLength={5}
+              placeholder="Campaign message"
+            />
+          </label>
+          <button>Create draft</button>
+        </form>
+      </details>
+      <p aria-live="polite">{message}</p>
+      <div className="list">
+        {campaigns.map((item) => (
+          <article key={item.public_id}>
+            <strong>
+              {item.name} · {item.status}
+            </strong>
+            <small>
+              {item.recipients} recipients · {item.suppressed} suppressed
+            </small>
+            <p>{item.subject}</p>
+            <div className="inline-actions">
+              <button
+                className="secondary"
+                onClick={() =>
+                  run(() =>
+                    mutate(
+                      `/api/v1/admin/notifications/campaigns/${item.public_id}`,
+                      { action: "PREVIEW" },
+                    ),
+                  )
+                }
+              >
+                Preview
+              </button>
+              <button
+                onClick={() =>
+                  run(() =>
+                    mutate(
+                      `/api/v1/admin/notifications/campaigns/${item.public_id}`,
+                      {
+                        action: "SCHEDULE",
+                        scheduledAt: new Date().toISOString(),
+                      },
+                    ),
+                  )
+                }
+              >
+                Schedule now
+              </button>
+              <button
+                className="secondary"
+                onClick={() =>
+                  run(() =>
+                    mutate(
+                      `/api/v1/admin/notifications/campaigns/${item.public_id}`,
+                      { action: "PAUSE" },
+                    ),
+                  )
+                }
+              >
+                Pause
+              </button>
+              <button
+                className="secondary"
+                onClick={() =>
+                  run(() =>
+                    mutate(
+                      `/api/v1/admin/notifications/campaigns/${item.public_id}`,
+                      { action: "CANCEL" },
+                    ),
+                  )
+                }
+              >
+                Cancel
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
