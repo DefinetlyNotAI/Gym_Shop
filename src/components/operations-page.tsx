@@ -330,9 +330,10 @@ export async function OperationsPage({
             read<PayoutQueue>("/api/v1/admin/finance/payouts") ?? {
               payouts: [],
               provider: {
+                name: "Amazon Payment Services",
                 available: false,
                 code: "PAYOUT_PROVIDER_UNAVAILABLE",
-                reason: "Business CliQ provider is not configured.",
+                reason: "APS wallet withdrawal capability and integration evidence are not verified.",
               },
             }
           }

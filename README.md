@@ -4,4 +4,4 @@ Role-aware staff and operations interface. It communicates with the API over ver
 
 Local port: `3002`.
 
-v0.2 adds promotion, referral, review, partner-verification, payout, newsletter-campaign, and role-scoped analytics operations. Finance views distinguish revenue, wallet movement, cash custody, deposits, and payout reconciliation; unavailable providers are shown rather than simulated.
+v0.2 adds promotion, referral, review, partner-verification, payout, newsletter-campaign, and role-scoped analytics operations. Finance views distinguish revenue, wallet movement, cash custody, deposits, and payout reconciliation. Amazon Payment Services is the selected integration; its unverified beneficiary-disbursement capability is shown explicitly, not simulated or confused with card refunds and merchant settlement.
