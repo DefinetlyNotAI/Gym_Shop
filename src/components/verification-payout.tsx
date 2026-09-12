@@ -15,7 +15,7 @@ export type PayoutAvailability = {
   withdrawableFils: number;
   minimumFils: number | null;
   providerAvailable: boolean;
-  provider: { code: string; reason: string };
+  provider: { name: string; code: string; reason: string };
   history: { public_id: string; amount_fils: string; status: string; requested_at: string; alias_masked: string }[];
 };
 
@@ -47,6 +47,6 @@ export function VerificationPanel({ summary }: { summary: VerificationSummary })
 export function PayoutPanel({ availability }: { availability: PayoutAvailability }) {
   return <>
     <section className="panel"><p className="eyebrow">Withdrawable wallet</p><h2>{(availability.withdrawableFils/1000).toFixed(3)} JOD</h2><p>{availability.verified?"All settled, undisputed wallet sources are eligible.":"Partner verification is required before wallet funds become withdrawable."}</p></section>
-    <section className="panel"><h2>CliQ payout provider</h2><p><strong>Unavailable</strong></p><p>{availability.provider.reason}</p><button type="button" disabled>Request payout</button><small>No wallet funds will be held while the provider is unavailable.</small><div className="list">{availability.history.map((item)=><article key={item.public_id}><strong>{item.public_id} · {item.status}</strong><small>{(Number(item.amount_fils)/1000).toFixed(3)} JOD · {item.alias_masked} · {new Date(item.requested_at).toISOString()}</small></article>)}</div></section>
+    <section className="panel"><h2>{availability.provider.name} · Wallet withdrawals</h2><p><strong>Unavailable</strong></p><p>{availability.provider.reason}</p><button type="button" disabled>Request payout</button><small>No wallet funds will be held while the provider is unavailable.</small><div className="list">{availability.history.map((item)=><article key={item.public_id}><strong>{item.public_id} · {item.status}</strong><small>{(Number(item.amount_fils)/1000).toFixed(3)} JOD · {item.alias_masked} · {new Date(item.requested_at).toISOString()}</small></article>)}</div></section>
   </>;
 }
