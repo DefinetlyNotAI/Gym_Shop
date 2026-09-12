@@ -1,5 +1,6 @@
 import type { DatabaseClient } from "@/lib/db/client";
 import { getRuntimeConfig } from "@/lib/config/env";
+import { getPayoutProviderStatus } from "@/lib/payouts/provider";
 
 export async function launchBlockers(client: DatabaseClient): Promise<string[]> {
   const config = getRuntimeConfig();
@@ -32,7 +33,7 @@ export async function v02ReleaseReadiness(client: DatabaseClient) {
   const found = new Set(tables.rows.map((entry) => entry.table_name));
   const missingSoftwareEvidence = V02_TABLES.filter((table) => !found.has(table));
   const provider = await client.execute<{ value: unknown }>("SELECT value FROM app_setting WHERE key='payout.provider'");
-  const businessCliqProvider = provider.rows[0]?.value === "ACTIVE";
+  const businessCliqProvider = getPayoutProviderStatus().available && provider.rows[0]?.value === "ACTIVE";
   const softwareReady = missingSoftwareEvidence.length === 0;
   return {
     softwareReady,

@@ -398,6 +398,26 @@ describe("v0.2 release journeys", () => {
     expect(await v02ReleaseReadiness(client)).toEqual({ softwareReady:true, missingSoftwareEvidence:[], businessCliqProvider:false, activationReady:false, blockers:["BUSINESS_CLIQ_PROVIDER_UNAVAILABLE"] });
   });
 
+  it("does not activate payouts from an ACTIVE setting without a real provider", async () => {
+    const previous = await client.execute<{ value: unknown }>(
+      "SELECT value FROM app_setting WHERE key='payout.provider'",
+    );
+    await client.execute("UPDATE app_setting SET value='\"ACTIVE\"'::jsonb WHERE key='payout.provider'");
+    try {
+      expect(await v02ReleaseReadiness(client)).toEqual({
+        softwareReady: true,
+        missingSoftwareEvidence: [],
+        businessCliqProvider: false,
+        activationReady: false,
+        blockers: ["BUSINESS_CLIQ_PROVIDER_UNAVAILABLE"],
+      });
+    } finally {
+      await client.execute("UPDATE app_setting SET value=$1::jsonb WHERE key='payout.provider'", [
+        JSON.stringify(previous.rows[0].value),
+      ]);
+    }
+  });
+
   it("loads the Finance overview from the canonical cash-ledger timestamp", async () => {
     const overview = await getFinanceOverview(client);
     expect(overview.reconciliationDefinitions.wallet).toContain("not new revenue");
