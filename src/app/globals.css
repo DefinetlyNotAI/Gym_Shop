@@ -910,3 +910,65 @@ details > :not(summary) + :not(summary) {
     animation: none !important;
   }
 }
+.product-gallery {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+.product-thumbnails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.product-thumbnails button {
+  padding: 0.3rem;
+  width: 80px;
+  height: 80px;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+.product-thumbnails button[aria-pressed="true"] {
+  border: 2px solid var(--accent);
+  background: var(--raised);
+}
+.product-thumbnails img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0.3rem;
+}
+.product-size-guide > p {
+  padding: 1rem 1rem 0;
+  font-size: 0.9rem;
+}
+.measurement-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+}
+.measurement-scroll table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.measurement-scroll caption {
+  padding: 0.5rem 0.75rem;
+  color: var(--muted);
+  text-align: start;
+}
+.measurement-scroll :is(th, td) {
+  padding: 0.6rem 0.85rem;
+  text-align: start;
+  border-block-start: 1px solid var(--border);
+  white-space: nowrap;
+}
+.measurement-scroll thead {
+  background: var(--raised);
+}
+.measurement-scroll tbody tr:nth-child(even) {
+  background: var(--surface);
+}

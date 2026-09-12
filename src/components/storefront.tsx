@@ -98,6 +98,7 @@ export function Storefront({
     <article className="product-card" key={product.id}>
       {product.media?.[0] ? (
         <Image
+          unoptimized
           className="product-art"
           src={`/media/${product.media[0].id}`}
           alt={arabic ? product.media[0].altAr : product.media[0].altEn}
