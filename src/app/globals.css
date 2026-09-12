@@ -972,3 +972,137 @@ details > :not(summary) + :not(summary) {
 .measurement-scroll tbody tr:nth-child(even) {
   background: var(--surface);
 }
+
+.account-session-action {
+  margin-block: 1rem 1.5rem;
+}
+.error-text {
+  color: #923b35;
+  overflow-wrap: anywhere;
+}
+.reviews-panel {
+  min-inline-size: 0;
+}
+.review-toolbar,
+.review-card-header,
+.review-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  flex-wrap: wrap;
+}
+.review-toolbar h2 {
+  margin: 0;
+}
+.review-toolbar label {
+  display: grid;
+  gap: 0.35rem;
+  inline-size: min(100%, 13rem);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.review-summary {
+  justify-content: flex-start;
+  padding-block: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.review-summary > strong {
+  font-size: 1.5rem;
+}
+.review-distribution,
+.review-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.review-distribution span,
+.review-badges span {
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.45rem;
+  background: var(--raised);
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+.review-list {
+  display: grid;
+  gap: 1rem;
+}
+.review-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--surface);
+  min-inline-size: 0;
+}
+.review-card > small {
+  color: var(--muted);
+}
+.review-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.review-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+.review-report,
+.order-cancellation {
+  min-inline-size: 0;
+}
+.review-report summary,
+.order-cancellation summary {
+  min-block-size: 44px;
+  padding: 0.65rem 0.8rem;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+}
+.review-report[open] summary,
+.order-cancellation[open] summary {
+  margin-block-end: 0.75rem;
+}
+.review-report fieldset,
+.order-cancellation fieldset {
+  display: grid;
+  gap: 0.8rem;
+  min-inline-size: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  padding: 0.85rem;
+}
+.review-report label {
+  display: grid;
+  gap: 0.4rem;
+}
+.review-report :is(select, textarea) {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.order-cancellation {
+  margin-block-start: 1rem;
+}
+.confirmation-check {
+  display: flex;
+  align-items: start;
+  gap: 0.65rem;
+}
+.confirmation-check input {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  flex: 0 0 auto;
+  margin-block-start: 0.2rem;
+}
+@media (max-width: 540px) {
+  .review-toolbar label,
+  .review-actions > button {
+    inline-size: 100%;
+  }
+  .review-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
