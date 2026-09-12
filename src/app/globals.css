@@ -976,6 +976,14 @@ details > :not(summary) + :not(summary) {
 .account-session-action {
   margin-block: 1rem 1.5rem;
 }
+.checkout-fields {
+  display: grid;
+  gap: 1rem;
+  min-inline-size: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
 .error-text {
   color: #923b35;
   overflow-wrap: anywhere;
