@@ -76,6 +76,15 @@ Customer notification history, pagination, read/read-all, marketing preferences 
 
 Original dependency-free layouts add read badges, local category activity links, separate marketing cards, collapsible diagnostics, referral metrics and a customization disclosure. Known errors have localized title/description/recovery guidance in both sites. Tests went red before implementation and again for a reviewer-found nullable notification-association mismatch; the corrected guard accepts the actual schema's nullable fields. Browser checks covered persisted marketing opt-out, rejected preference update and refresh, initial load failure, and unverified customization with retained draft. Arabic mobile 390×844 layouts had no horizontal document overflow and tested buttons were 44 px. Populated-notification read/pagination, verified customization success and clipboard failure still need fresh browser acceptance. Whole-site migration and the broader release checklist remain open.
 
+## Profile and saved-address task — completed 2026-09-13
+
+- [x] Migrate profile PATCH and address POST/PATCH/DELETE to guarded production helpers and localized error toasts; require actual update/deletion flags or a matching saved address ID.
+- [x] Use submit handlers that preserve rejected drafts, serial pending controls, localized labels/help and confirmed-state refresh rather than JSON success text. Expose optional coordinates and all existing address fields/defaults.
+- [x] Reset only successful address creation; reconcile refreshed shipping/billing flags by remounting only the affected checkbox, retaining unrelated text drafts.
+- [x] Verify production-module RED/GREEN regressions, customer 44/staff 30 tests, both client lint/build checks, independent read-only review and browser save/edit/delete/failure/Arabic-mobile journeys.
+
+The user explicitly narrowed the active goal to finishing this current task and stopping, even with the broader v0.2 release incomplete. This task completion does not close the whole-site error-toast gate or release checklist. Authentication/security, verification/uploads, driver/staff consumers, role-correct server-rendered error pages and broader endpoint/provider acceptance remain open in the central audit.
+
 ## Initial implementation evidence
 
 The contract tests were observed failing before implementation, then passing in both independently built clients. A further non-JSON-response regression went red before `readApiData` was introduced; customer checkout/referral/quote shape tests went red against the unvalidated production helper before runtime guards were added. An array-valued checkout status was separately reproduced and rejected using strict equality. Known-code/status mapping and safe diagnostics are shared as identical source, not via an unavailable cross-repository package.
