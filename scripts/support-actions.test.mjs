@@ -1,20 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
-import ts from "typescript";
+import { loadProduction } from "./load-production.mjs";
 
-const source = await readFile(
+const { editSupportMessage } = await loadProduction(
   new URL("../src/lib/support-actions.ts", import.meta.url),
-  "utf8",
-);
-const output = ts.transpileModule(source, {
-  compilerOptions: {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-  },
-}).outputText;
-const { editSupportMessage } = await import(
-  `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
 );
 
 test("staff message editing uses PATCH, encoded identifiers and a trimmed body", async () => {
@@ -64,7 +53,7 @@ test("authorization failures, unavailable upstreams and malformed successes cann
         { status: 422 },
       ),
     ),
-    /Only your own messages.*MESSAGE_EDIT_FORBIDDEN/,
+    (error) => error.code === "MESSAGE_EDIT_FORBIDDEN" && error.status === 422,
   );
   await assert.rejects(
     editSupportMessage(
@@ -73,13 +62,13 @@ test("authorization failures, unavailable upstreams and malformed successes cann
       "Reply",
       async () => new Response("Unavailable", { status: 503 }),
     ),
-    /503/,
+    (error) => error.status === 503,
   );
   await assert.rejects(
     editSupportMessage("ticket", "message", "Reply", async () =>
       Response.json({ data: {} }),
     ),
-    /Unexpected/,
+    (error) => error.code === "INVALID_RESPONSE",
   );
   assert.deepEqual(
     await editSupportMessage("ticket", "message", "Reply", async () =>

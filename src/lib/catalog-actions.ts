@@ -1,3 +1,4 @@
+import { apiErrorFromPayload, ApiFailure } from "@/lib/api-errors";
 type CatalogAction =
   | { kind: "create" | "taxonomy" | "guide" | "media"; body: unknown }
   | { kind: "update"; id: string; body: unknown };
@@ -22,14 +23,9 @@ export async function catalogMutation(
     body: JSON.stringify(action.body),
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new Error(
-      payload?.error?.code
-        ? `${payload.error.message ?? "Could not save"} (${payload.error.code})`
-        : `Could not save (HTTP ${response.status}). Please try again.`,
-    );
+  if (!response.ok) throw apiErrorFromPayload(payload, response.status);
   if (!payload || !Object.hasOwn(payload, "data"))
-    throw new Error("Unexpected API response. Please refresh and try again.");
+    throw new ApiFailure("INVALID_RESPONSE");
   return payload.data;
 }
 

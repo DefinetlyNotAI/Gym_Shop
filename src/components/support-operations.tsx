@@ -3,6 +3,11 @@
 import { useRef, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
 import { editSupportMessage } from "@/lib/support-actions";
+import {
+  ApiFailure,
+  apiErrorFromPayload,
+  presentApiError,
+} from "@/lib/api-errors";
 
 type Ticket = {
   public_id: string;
@@ -46,14 +51,9 @@ async function send<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
   const result = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new Error(
-      result?.error?.message ??
-        result?.error?.code ??
-        `Support action failed (HTTP ${response.status})`,
-    );
+  if (!response.ok) throw apiErrorFromPayload(result, response.status);
   if (!result || !Object.hasOwn(result, "data"))
-    throw new Error("Unexpected support response. Please refresh.");
+    throw new ApiFailure("INVALID_RESPONSE");
   return result.data;
 }
 
@@ -169,6 +169,7 @@ export function SupportOperations({
     "",
   );
   const [busy, setBusy] = useState(false);
+  const [toasted, setToasted] = useState(false);
   const working = useRef(false);
   const ticketPath = (id: string) =>
     `/api/v1/admin/support/tickets/${encodeURIComponent(id)}`;
@@ -188,15 +189,13 @@ export function SupportOperations({
     working.current = true;
     setBusy(true);
     setMessage("");
+    setToasted(false);
     try {
       await action();
       return true;
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : text("Support action failed.", "تعذّر إتمام الإجراء."),
-      );
+      setToasted(true);
+      setMessage(presentApiError(error));
       return false;
     } finally {
       working.current = false;
@@ -248,7 +247,7 @@ export function SupportOperations({
     const data = new FormData(form);
     void perform(async () => {
       const body = String(data.get("message") ?? "").trim();
-      if (!body) throw new Error(text("Enter a message.", "أدخل رسالة."));
+      if (!body) throw new ApiFailure("MESSAGE_INVALID");
       await send(ticketPath(id), "POST", {
         message: body,
         privateNote: data.get("privateNote") === "on",
@@ -271,7 +270,7 @@ export function SupportOperations({
   return (
     <section id="support" className="support-workspace" aria-busy={busy}>
       <h2>{text("Support operations", "عمليات الدعم")}</h2>
-      <p className="support-feedback" role="status">
+      <p className="support-feedback" role={toasted ? undefined : "status"}>
         {(typeof message === "string"
           ? message
           : text(message.en, message.ar)) ||

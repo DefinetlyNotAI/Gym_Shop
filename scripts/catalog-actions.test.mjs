@@ -1,21 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
-import ts from "typescript";
+import { loadProduction } from "./load-production.mjs";
 
-const source = await readFile(
-  new URL("../src/lib/catalog-actions.ts", import.meta.url),
-  "utf8",
-);
-const output = ts.transpileModule(source, {
-  compilerOptions: {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-  },
-}).outputText;
-const { catalogMutation, guideFromForm, productFromForm } = await import(
-  `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
-);
+const { catalogMutation, guideFromForm, productFromForm } =
+  await loadProduction(
+    new URL("../src/lib/catalog-actions.ts", import.meta.url),
+  );
 
 test("catalog actions use their real method and encoded resource URL", async () => {
   const calls = [];
@@ -149,13 +139,13 @@ test("failed and non-JSON responses remain actionable instead of reporting a sav
         { status: 422 },
       ),
     ),
-    /Image scan is not complete.*MEDIA_NOT_READY/,
+    (error) => error.code === "MEDIA_NOT_READY" && /scan/i.test(error.message),
   );
   await assert.rejects(
     catalogMutation(
       { kind: "guide", body: {} },
       async () => new Response("upstream offline", { status: 503 }),
     ),
-    /503/,
+    (error) => error.status === 503,
   );
 });

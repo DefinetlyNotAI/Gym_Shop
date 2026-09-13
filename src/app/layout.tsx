@@ -11,6 +11,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { SimulationSwitcher } from "@/components/simulation-switcher";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { getSession } from "@/lib/api";
+import { ApiToasts } from "@/components/api-toasts";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -67,6 +68,7 @@ export default async function RootLayout({
               {children}
             </div>
           </div>
+          <ApiToasts staff />
         </LanguageProvider>
       </body>
     </html>

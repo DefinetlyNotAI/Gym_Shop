@@ -1,3 +1,4 @@
+import { apiErrorFromPayload, ApiFailure } from "@/lib/api-errors";
 export async function editSupportMessage(
   ticketId: string,
   messageId: string,
@@ -16,15 +17,8 @@ export async function editSupportMessage(
     },
   );
   const payload = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new Error(
-      payload?.error?.code
-        ? `${payload.error.message ?? "Message could not be edited"} (${payload.error.code})`
-        : `Message could not be edited (HTTP ${response.status}).`,
-    );
+  if (!response.ok) throw apiErrorFromPayload(payload, response.status);
   if (typeof payload?.data?.edited !== "boolean")
-    throw new Error(
-      "Unexpected API response. Refresh the conversation to check its status.",
-    );
+    throw new ApiFailure("INVALID_RESPONSE");
   return { edited: payload.data.edited };
 }

@@ -8,6 +8,7 @@ import {
   LocalizedText as T,
 } from "@/components/language-provider";
 import { PrivateMediaUpload } from "@/components/private-media-upload";
+import { ApiFailure, presentApiError } from "@/lib/api-errors";
 import {
   catalogMutation,
   guideFromForm,
@@ -79,6 +80,7 @@ function ActionForm({
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
+  const [toasted, setToasted] = useState(false);
   return (
     <form
       aria-label={label}
@@ -91,6 +93,7 @@ function ActionForm({
         setPending(true);
         setMessage("");
         setFailed(false);
+        setToasted(false);
         try {
           await submit(form);
           setMessage("SAVED");
@@ -98,13 +101,16 @@ function ActionForm({
           router.refresh();
         } catch (error) {
           setFailed(true);
+          setToasted(error instanceof ApiFailure || error instanceof TypeError);
           setMessage(
-            error instanceof Error
-              ? error.message
-              : text(
-                  "Could not save. Please try again.",
-                  "تعذر الحفظ. يرجى المحاولة مجدداً.",
-                ),
+            error instanceof ApiFailure || error instanceof TypeError
+              ? presentApiError(error)
+              : error instanceof Error
+                ? error.message
+                : text(
+                    "Could not save. Please try again.",
+                    "تعذر الحفظ. يرجى المحاولة مجدداً.",
+                  ),
           );
         } finally {
           setPending(false);
@@ -116,7 +122,7 @@ function ActionForm({
       </fieldset>
       <p
         className={failed ? "catalog-feedback is-error" : "catalog-feedback"}
-        role={failed ? "alert" : "status"}
+        role={failed ? (toasted ? undefined : "alert") : "status"}
       >
         {pending
           ? text("Saving…", "جارٍ الحفظ…")
