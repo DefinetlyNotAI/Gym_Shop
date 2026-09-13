@@ -17,6 +17,20 @@ const { apiErrorFromPayload, errorNotice, appendNotice, readApiData } =
     `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
   );
 
+test("referral and notice errors provide specific localized recovery", () => {
+  for (const [code, pattern] of [
+    ["VERIFICATION_REQUIRED", /partner|verification/i],
+    ["REFERRAL_CODE_INVALID", /6|24|characters/i],
+    ["NOTIFICATION_UPDATE_FAILED", /notification/i],
+    ["PREFERENCE_INVALID", /marketing|preference/i],
+    ["CURSOR_INVALID", /refresh|latest/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 422));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.equal(notice.title.en.includes(code), false);
+  }
+});
 test("commerce and fulfillment codes explain the specific action to correct", () => {
   for (const [code, pattern] of [
     ["CART_UPDATE_FAILED", /cart/i],
