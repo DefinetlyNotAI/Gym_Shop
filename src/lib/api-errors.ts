@@ -70,6 +70,25 @@ const notices: Record<string, Copy> = {
   ORIGIN_REJECTED: stale,
   FETCH_SITE_REJECTED: stale,
   VALIDATION_ERROR: validation,
+  PROFILE_UPDATE_FAILED: copy(
+    "Your profile couldn't be saved",
+    "تعذّر حفظ ملفك الشخصي",
+    "Review your name and international phone format. Check your current profile before submitting again; a recent sign-in may be required.",
+    "راجع اسمك وتنسيق رقم الهاتف الدولي. تحقّق من ملفك الحالي قبل الإرسال مجدداً؛ قد يلزم تسجيل دخول حديث.",
+  ),
+  ADDRESS_FAILED: copy(
+    "Your address couldn't be updated",
+    "تعذّر تحديث عنوانك",
+    "Review the address fields and your saved address list before submitting again. Your entered details remain available.",
+    "راجع حقول العنوان وقائمة عناوينك المحفوظة قبل الإرسال مجدداً. تظل التفاصيل التي أدخلتها متاحة.",
+  ),
+  ADDRESS_NOT_FOUND: copy(
+    "This saved address is no longer available",
+    "لم يعد هذا العنوان المحفوظ متاحاً",
+    "Refresh your saved addresses before editing or deleting again. Your draft remains available until you leave the page.",
+    "حدّث عناوينك المحفوظة قبل التعديل أو الحذف مجدداً. تظل مسودتك متاحة حتى مغادرة الصفحة.",
+    "refresh",
+  ),
   ACCOUNT_REQUIRED: signin,
   CURSOR_INVALID: stale,
   VERIFICATION_REQUIRED: copy(
