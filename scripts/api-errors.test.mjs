@@ -17,6 +17,20 @@ const { apiErrorFromPayload, errorNotice, appendNotice, readApiData } =
     `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
   );
 
+test("profile and address failures offer specific safe recovery", () => {
+  for (const [code, pattern] of [
+    ["PROFILE_UPDATE_FAILED", /profile/i],
+    ["ADDRESS_FAILED", /address/i],
+    ["ADDRESS_NOT_FOUND", /address|saved/i],
+  ]) {
+    const notice = errorNotice(
+      apiErrorFromPayload({ error: { code, message: "private" } }, 422),
+    );
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.doesNotMatch(JSON.stringify(notice), /private/);
+  }
+});
 test("referral and notice errors provide specific localized recovery", () => {
   for (const [code, pattern] of [
     ["VERIFICATION_REQUIRED", /partner|verification/i],
