@@ -17,6 +17,21 @@ const { apiErrorFromPayload, errorNotice, appendNotice, readApiData } =
     `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
   );
 
+test("commerce and fulfillment codes explain the specific action to correct", () => {
+  for (const [code, pattern] of [
+    ["CART_UPDATE_FAILED", /cart/i],
+    ["DRIVER_INVALID", /driver/i],
+    ["PICKUP_PIN_INVALID", /pin/i],
+    ["COLLECTION_MISMATCH", /cash|amount/i],
+    ["POINT_CONVERSION_WEEKLY_LIMIT", /week/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 409));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.equal(notice.title.en.includes(code), false);
+    assert.ok(notice.description.ar);
+  }
+});
+
 test("non-JSON failures retain HTTP guidance and malformed success is not confirmed", async () => {
   for (const status of [403, 503]) {
     await assert.rejects(

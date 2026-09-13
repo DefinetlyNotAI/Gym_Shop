@@ -1,26 +1,46 @@
 "use client";
-
 import { useState } from "react";
-
+import Link from "next/link";
+import { useLanguage } from "@/components/language-provider";
+import { useApiAction } from "@/components/use-api-action";
+import { copyOrderToCart } from "@/lib/commerce-actions";
 export function ReorderButton({ publicId }: { publicId: string }) {
-  const [message, setMessage] = useState("");
-
-  async function reorder() {
-    const response = await fetch(`/api/v1/orders/${encodeURIComponent(publicId)}/reorder`, { method: "POST" });
-    const body = await response.json();
-    setMessage(
-      response.ok
-        ? `${body.data.added.length} line(s) copied as unselected saved items. Review current prices and stock in your cart.`
-        : body.error?.message ?? "Reorder failed",
-    );
-  }
-
+  const { text } = useLanguage();
+  const { pending, perform, message, live } = useApiAction();
+  const [copied, setCopied] = useState<{
+    added: number;
+    rejected: number;
+  } | null>(null);
   return (
-    <div>
-      <button className="secondary" onClick={reorder}>
-        Reorder into saved cart / إعادة الطلب
+    <div aria-busy={pending}>
+      <button
+        type="button"
+        className="secondary"
+        disabled={pending || copied !== null}
+        onClick={() =>
+          void perform(async () => {
+            const r = await copyOrderToCart(publicId);
+            setCopied({ added: r.added.length, rejected: r.rejected.length });
+          })
+        }
+      >
+        {text(
+          pending ? "Copying saved items…" : "Reorder into saved cart",
+          pending ? "جارٍ نسخ المنتجات…" : "إعادة الطلب إلى السلة المحفوظة",
+        )}
       </button>
-      <small aria-live="polite">{message}</small>
+      {copied ? (
+        <p role="status">
+          {text(
+            `${copied.added} line(s) copied as unselected saved items; ${copied.rejected} unavailable line(s) skipped. Review current prices and stock. No new order or payment was created.`,
+            `تم نسخ ${copied.added} منتجات غير محددة وتجاوز ${copied.rejected} منتجات غير متوفرة. راجع الأسعار والمخزون الحالي. لم يُنشأ طلب أو دفع جديد.`,
+          )}{" "}
+          <Link href="/cart">
+            {text("Review saved cart", "راجع السلة المحفوظة")}
+          </Link>
+        </p>
+      ) : null}
+      <p aria-live={live}>{message}</p>
     </div>
   );
 }

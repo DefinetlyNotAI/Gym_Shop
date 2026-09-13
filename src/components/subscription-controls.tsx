@@ -1,5 +1,103 @@
 "use client";
-import{useState}from"react";
-export function NewsletterControl({signedIn}:{signedIn:boolean}){const[message,setMessage]=useState("");async function set(subscribed:boolean){const response=await fetch("/api/v1/subscriptions/newsletter",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({subscribed,source:"HOMEPAGE_NEWSLETTER"})});const payload=await response.json();setMessage(response.ok?(subscribed?"Subscribed / تم الاشتراك":"Unsubscribed / تم إلغاء الاشتراك"):(payload.error?.code??"Update failed"));}return <section className="panel"><h2>Newsletter / النشرة البريدية</h2><p>Optional product news and offers. You can unsubscribe at any time; consent is checked again before every send.</p>{signedIn?<div className="inline-actions"><button onClick={()=>set(true)}>Subscribe / اشتراك</button><button className="secondary" onClick={()=>set(false)}>Unsubscribe / إلغاء</button></div>:<a href="/account">Sign in to choose / سجّل الدخول للاختيار</a>}<p aria-live="polite">{message}</p></section>}
-export function RestockControls({variants}:{variants:{id:string;available:number|null;options:Record<string,string>}[]}){const[message,setMessage]=useState("");const unavailable=variants.filter(item=>Number(item.available)<=0);async function subscribe(id:string){const response=await fetch(`/api/v1/catalog/variants/${id}/restock-subscription`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({subscribed:true})});const payload=await response.json();setMessage(response.ok?"Exact variant alert saved / تم حفظ تنبيه هذا الخيار":(payload.error?.code??"Sign in to subscribe"));}return unavailable.length?<section className="panel"><h2>Back-in-stock alerts / تنبيهات توفر المخزون</h2><p>Choose the exact unavailable variant. Each variant is tracked separately and sends once.</p>{unavailable.map(item=><button className="secondary" key={item.id} onClick={()=>subscribe(item.id)}>Notify me: {Object.values(item.options).join(" / ")||item.id}</button>)}<p aria-live="polite">{message}</p></section>:null}
-
+import Link from "next/link";
+import { useLanguage } from "@/components/language-provider";
+import { useApiAction } from "@/components/use-api-action";
+import { subscribeVariant, updateNewsletter } from "@/lib/commerce-actions";
+export function NewsletterControl({ signedIn }: { signedIn: boolean }) {
+  const { text } = useLanguage();
+  const { pending, perform, message, live } = useApiAction();
+  function update(subscribed: boolean) {
+    void perform(() => updateNewsletter(subscribed), {
+      en: subscribed
+        ? "Subscribed to optional email updates."
+        : "Unsubscribed from optional email updates.",
+      ar: subscribed
+        ? "تم الاشتراك في تحديثات البريد الاختيارية."
+        : "تم إلغاء الاشتراك في تحديثات البريد الاختيارية.",
+    });
+  }
+  return (
+    <section className="panel" aria-busy={pending}>
+      <h2>{text("Newsletter", "النشرة البريدية")}</h2>
+      <p>
+        {text(
+          "Optional product news and offers. You can unsubscribe at any time; consent is checked before every send.",
+          "أخبار المنتجات والعروض اختيارية. يمكنك إلغاء الاشتراك في أي وقت؛ تُراجع الموافقة قبل كل إرسال.",
+        )}
+      </p>
+      {signedIn ? (
+        <div className="inline-actions">
+          <button type="button" disabled={pending} onClick={() => update(true)}>
+            {text(
+              pending ? "Updating…" : "Subscribe",
+              pending ? "جارٍ التحديث…" : "اشتراك",
+            )}
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            className="secondary"
+            onClick={() => update(false)}
+          >
+            {text("Unsubscribe", "إلغاء الاشتراك")}
+          </button>
+        </div>
+      ) : (
+        <Link className="secondary" href="/account">
+          {text("Sign in to choose", "سجّل الدخول للاختيار")}
+        </Link>
+      )}
+      <p aria-live={live}>{message}</p>
+    </section>
+  );
+}
+export function RestockControls({
+  variants,
+}: {
+  variants: {
+    id: string;
+    available: number | null;
+    options: Record<string, string>;
+  }[];
+}) {
+  const { text } = useLanguage();
+  const { pending, perform, message, live } = useApiAction();
+  const unavailable = variants.filter(
+    (v) => v.available !== null && v.available <= 0,
+  );
+  if (!unavailable.length) return null;
+  return (
+    <section className="panel" aria-busy={pending}>
+      <h2>{text("Back-in-stock alerts", "تنبيهات توفر المخزون")}</h2>
+      <p>
+        {text(
+          "Choose the exact unavailable variant. Each variant is tracked separately and sends once.",
+          "اختر الخيار غير المتوفر بالضبط. يُتابَع كل خيار بشكل مستقل ويُرسل تنبيه واحد.",
+        )}
+      </p>
+      <div className="inline-actions">
+        {unavailable.map((v) => (
+          <button
+            type="button"
+            className="secondary"
+            disabled={pending}
+            key={v.id}
+            onClick={() =>
+              void perform(() => subscribeVariant(v.id), {
+                en: "An alert for this exact variant is saved.",
+                ar: "تم حفظ تنبيه لهذا الخيار بالضبط.",
+              })
+            }
+          >
+            {text(
+              pending ? "Saving…" : "Notify me:",
+              pending ? "جارٍ الحفظ…" : "أبلغني:",
+            )}{" "}
+            {Object.values(v.options).join(" / ") || v.id}
+          </button>
+        ))}
+      </div>
+      <p aria-live={live}>{message}</p>
+    </section>
+  );
+}
