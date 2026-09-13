@@ -50,6 +50,14 @@ setMessage(presentApiError(error));
 
 The full audit remains open until every UI-accessible request family is migrated and tested, including authentication/MFA/recovery, subscriptions, wallet/referrals, partner verification, uploads, driver actions and all staff operations. Server-rendered page-load failures need their own appropriate error-page presentation rather than a browser toast before hydration. APS withdrawal capability remains separately unverified.
 
+## Commerce and fulfillment migration progress — 2026-09-13
+
+Customer cart/add-to-cart, newsletter/restock subscriptions, reward conversion and reorder now consume guarded production request helpers and the localized toast contract. Staff packing/dispatch/pickup/reassignment use actual confirmation flags. A synchronous action gate prevents overlapping submissions, restores pending controls in `finally`, and does not retry mutations. The owning hook keeps errors translated when language changes; already-toasted local feedback is not announced twice. Quantity edits use an explicit submit form rather than a request on every keystroke. Reward conversion retains its operation key after an uncertain failure while the amount is unchanged.
+
+Production-module RED/GREEN tests cover the action gate, typed commerce/fulfillment failures, methods/bodies/encoded IDs and malformed confirmations. Browser acceptance caught a numeric `bigint` cart-price response from PGlite being rejected by a string-only guard; a failing regression preceded safe integer/digit-string normalization. Malformed/unsafe prices remain rejected.
+
+Fresh browser checks in memory-only SIM cover confirmed quantity save, rejected save with the draft retained and controls restored, newsletter subscribe/unsubscribe confirmation, and insufficient-points feedback with the amount retained. Arabic cart/toast presentation at 390×844 had no horizontal document overflow and tested action/dismiss controls measured at least 44 px. Staff fulfillment, restock and reorder are covered by production helper tests but their fresh browser mutation journeys remain open. A reviewer found no critical/important scoped defect; hook-level conversion-key reuse coverage remains a minor follow-up. This progress does not tick the whole remaining-consumer/whole-site acceptance tasks.
+
 ## Initial implementation evidence
 
 The contract tests were observed failing before implementation, then passing in both independently built clients. A further non-JSON-response regression went red before `readApiData` was introduced; customer checkout/referral/quote shape tests went red against the unvalidated production helper before runtime guards were added. An array-valued checkout status was separately reproduced and rejected using strict equality. Known-code/status mapping and safe diagnostics are shared as identical source, not via an unavailable cross-repository package.
