@@ -1,4 +1,18 @@
 "use client";
+import {
+  apiErrorFromPayload,
+  presentApiError,
+  errorNotice,
+  type ErrorNotice,
+} from "@/lib/api-errors";
+import {
+  readCheckoutResult,
+  readReferralResult,
+  readPricingPreview,
+  type CheckoutResult,
+  type PricingPreview,
+} from "@/lib/checkout-responses";
+import { useLanguage } from "@/components/language-provider";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -31,26 +45,6 @@ type Pickup = {
   hours: unknown;
 };
 
-type CheckoutResult = {
-  orderId: string;
-  status: string;
-  paymentReference?: string;
-  paymentUrl?: string;
-  paymentFields?: Record<string, string>;
-};
-
-type PricingPreview = {
-  merchandiseFils: number;
-  discountFils: number;
-  deliveryFils: number;
-  taxFils: number;
-  totalFils: number;
-  walletAvailableFils: number;
-  walletTenderFils: number;
-  externalDueFils: number;
-  rejections: { ruleId: string; code: string }[];
-};
-
 export function CheckoutForm({
   zones,
   pickups,
@@ -81,6 +75,8 @@ export function CheckoutForm({
     null,
   );
   const [message, setMessage] = useState("");
+  const [toastError, setToastError] = useState<ErrorNotice | null>(null);
+  const { language } = useLanguage();
   const selectedZone = useMemo(
     () => zones.find((zone) => zone.id === zoneId),
     [zoneId, zones],
@@ -103,49 +99,53 @@ export function CheckoutForm({
   }, []);
 
   async function applyReferral() {
-    if (!referralCode.trim()) return true;
-    const response = await fetch("/api/v1/checkout/referral", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        code: referralCode.trim(),
-        source: localStorage.getItem("gym-shop-referral") ? "LINK" : "MANUAL",
-      }),
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      setMessage(
-        payload.error?.message ??
-          "Referral code could not be applied. / تعذر تطبيق رمز الإحالة.",
-      );
+    setToastError(null);
+    try {
+      if (!referralCode.trim()) return true;
+      const response = await fetch("/api/v1/checkout/referral", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          code: referralCode.trim(),
+          source: localStorage.getItem("gym-shop-referral") ? "LINK" : "MANUAL",
+        }),
+      });
+      const result = await readReferralResult(response);
+      setReferralCode(result.code);
+      setReferralApplied(true);
+      return true;
+    } catch (error) {
+      setToastError(errorNotice(error));
+      setMessage(presentApiError(error));
       return false;
     }
-    setReferralCode(payload.data.code);
-    setReferralApplied(true);
-    return true;
   }
 
   async function removeReferral() {
-    const response = await fetch("/api/v1/checkout/referral", {
-      method: "DELETE",
-    });
-    if (!response.ok && response.status !== 404) {
-      const payload = await response.json();
-      setMessage(
-        payload.error?.message ?? "Referral code could not be removed.",
-      );
-      return;
+    setToastError(null);
+    try {
+      const response = await fetch("/api/v1/checkout/referral", {
+        method: "DELETE",
+      });
+      if (!response.ok && response.status !== 404) {
+        const payload = await response.json().catch(() => null);
+        throw apiErrorFromPayload(payload, response.status);
+      }
+      localStorage.removeItem("gym-shop-referral");
+      setReferralCode("");
+      setReferralApplied(false);
+      setPricingPreview(null);
+      setMessage("Referral removed. / تمت إزالة الإحالة.");
+    } catch (error) {
+      setToastError(errorNotice(error));
+      setMessage(presentApiError(error));
     }
-    localStorage.removeItem("gym-shop-referral");
-    setReferralCode("");
-    setReferralApplied(false);
-    setPricingPreview(null);
-    setMessage("Referral removed. / تمت إزالة الإحالة.");
   }
 
   async function submit(form: FormData) {
     if (pending || createdOrder) return;
     setPending(true);
+    setToastError(null);
     try {
       setMessage("Placing order… / جارٍ إنشاء الطلب…");
       if (!referralApplied && !(await applyReferral())) return;
@@ -176,14 +176,7 @@ export function CheckoutForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const payload = await response.json();
-      if (!response.ok) {
-        setMessage(
-          payload.error?.message ?? "Checkout failed / تعذر إتمام الطلب",
-        );
-        return;
-      }
-      const result = payload.data as CheckoutResult;
+      const result = await readCheckoutResult(response);
       setCreatedOrder(result);
       if (
         paymentMethod === "CARD" &&
@@ -222,42 +215,37 @@ export function CheckoutForm({
         `Order ${result.orderId} confirmed. The pickup PIN is sent through WhatsApp when required. / تم تأكيد الطلب وسيصل رمز الاستلام عبر واتساب عند الحاجة.`,
       );
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Checkout failed. Check your orders before trying again. / تعذر إتمام الطلب. راجع طلباتك قبل المحاولة مجددًا.",
-      );
+      setToastError(errorNotice(error));
+      setMessage(presentApiError(error));
     } finally {
       setPending(false);
     }
   }
 
   async function previewCoupon() {
-    if (mode !== "DELIVERY" || !zoneId) {
+    setToastError(null);
+    try {
+      if (mode !== "DELIVERY" || !zoneId) {
+        setMessage(
+          "Select a delivery zone to preview pricing. / اختر منطقة توصيل لمعاينة السعر.",
+        );
+        return;
+      }
+      const parameters = new URLSearchParams({ zoneId });
+      if (couponCode.trim()) parameters.set("couponCode", couponCode.trim());
+      if (walletFils) parameters.set("walletFils", String(walletFils));
+      const response = await fetch(`/api/v1/checkout/quote?${parameters}`, {
+        headers: { accept: "application/json" },
+      });
+      setPricingPreview(await readPricingPreview(response));
       setMessage(
-        "Select a delivery zone to preview pricing. / اختر منطقة توصيل لمعاينة السعر.",
+        "Pricing refreshed from the checkout engine. / تم تحديث السعر من محرك الدفع.",
       );
-      return;
-    }
-    const parameters = new URLSearchParams({ zoneId });
-    if (couponCode.trim()) parameters.set("couponCode", couponCode.trim());
-    if (walletFils) parameters.set("walletFils", String(walletFils));
-    const response = await fetch(`/api/v1/checkout/quote?${parameters}`, {
-      headers: { accept: "application/json" },
-    });
-    const payload = await response.json();
-    if (!response.ok) {
+    } catch (error) {
+      setToastError(errorNotice(error));
+      setMessage(presentApiError(error));
       setPricingPreview(null);
-      setMessage(
-        payload.error?.message ??
-          "Pricing preview failed. / تعذرت معاينة السعر.",
-      );
-      return;
     }
-    setPricingPreview(payload.data as PricingPreview);
-    setMessage(
-      "Pricing refreshed from the checkout engine. / تم تحديث السعر من محرك الدفع.",
-    );
   }
 
   return (
@@ -533,7 +521,9 @@ export function CheckoutForm({
           View order and payment status / عرض الطلب وحالة الدفع
         </Link>
       ) : null}
-      <p aria-live="polite">{message}</p>
+      <p aria-live={toastError ? "off" : "polite"}>
+        {toastError ? toastError.description[language] : message}
+      </p>
     </section>
   );
 }

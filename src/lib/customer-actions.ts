@@ -1,3 +1,4 @@
+import { apiErrorFromPayload, ApiFailure } from "@/lib/api-errors";
 type ReportInput = {
   reason: "SPAM" | "OFFENSIVE" | "PERSONAL_INFO" | "IRRELEVANT" | "OTHER";
   details?: string;
@@ -28,20 +29,7 @@ export async function customerAction(
       : {}),
   });
   const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const error =
-      payload && typeof payload === "object" && "error" in payload
-        ? payload.error
-        : null;
-    const message =
-      error &&
-      typeof error === "object" &&
-      "message" in error &&
-      typeof error.message === "string"
-        ? error.message
-        : `Request failed (${response.status})`;
-    throw new Error(message);
-  }
+  if (!response.ok) throw apiErrorFromPayload(payload, response.status);
   if (
     !payload ||
     typeof payload !== "object" ||
@@ -50,7 +38,7 @@ export async function customerAction(
     typeof payload.data !== "object" ||
     Array.isArray(payload.data)
   )
-    throw new Error("Unexpected server response");
+    throw new ApiFailure("INVALID_RESPONSE");
   return payload.data as Record<string, unknown>;
 }
 

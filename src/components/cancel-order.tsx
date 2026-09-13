@@ -1,4 +1,5 @@
 "use client";
+import { presentApiError } from "@/lib/api-errors";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -48,11 +49,7 @@ export function CancelOrder({
       setCancelled(true);
       router.refresh();
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : text("Cancellation failed", "تعذر الإلغاء"),
-      );
+      setError(presentApiError(error));
     } finally {
       setPending(false);
     }
@@ -80,11 +77,7 @@ export function CancelOrder({
           </button>
         </fieldset>
       </form>
-      {error ? (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {error ? <p className="error-text">{error}</p> : null}
     </details>
   );
 }

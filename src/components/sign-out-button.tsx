@@ -1,4 +1,5 @@
 "use client";
+import { presentApiError } from "@/lib/api-errors";
 
 import { useState } from "react";
 import { useLanguage } from "@/components/language-provider";
@@ -24,11 +25,7 @@ export function SignOutButton() {
       // Full navigation discards private client state and stale account pages.
       window.location.reload();
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : text("Sign-out failed.", "تعذر تسجيل الخروج."),
-      );
+      setError(presentApiError(error));
       setPending(false);
     }
   }
@@ -44,11 +41,7 @@ export function SignOutButton() {
           ? text("Signing out…", "جارٍ تسجيل الخروج…")
           : text("Sign out", "تسجيل الخروج")}
       </button>
-      {error ? (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {error ? <p className="error-text">{error}</p> : null}
     </div>
   );
 }

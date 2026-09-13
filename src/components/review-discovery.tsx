@@ -1,4 +1,5 @@
 "use client";
+import { presentApiError } from "@/lib/api-errors";
 
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
@@ -47,11 +48,7 @@ function ReviewCard({
         );
       onVote(review.publicId, result.count);
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : text("Vote failed", "تعذر التصويت"),
-      );
+      setError(presentApiError(error));
     } finally {
       setPending(null);
     }
@@ -72,11 +69,7 @@ function ReviewCard({
         );
       setReported(true);
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : text("Report failed", "تعذر إرسال البلاغ"),
-      );
+      setError(presentApiError(error));
     } finally {
       setPending(null);
     }
@@ -191,11 +184,7 @@ function ReviewCard({
           )}
         </details>
       </div>
-      {error ? (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {error ? <p className="error-text">{error}</p> : null}
     </article>
   );
 }

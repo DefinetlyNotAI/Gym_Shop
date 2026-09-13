@@ -7,6 +7,7 @@ import {
   type Language,
 } from "@/components/language-provider";
 import { StoreFooter, StoreHeader } from "@/components/store-chrome";
+import { ApiToasts } from "@/components/api-toasts";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function RootLayout({
             {children}
           </div>
           <StoreFooter />
+          <ApiToasts />
         </LanguageProvider>
       </body>
     </html>

@@ -1,20 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
-import ts from "typescript";
+import { loadProduction } from "./load-production.mjs";
 
-const source = await readFile(
+const { customerAction, reviewReportFromForm } = await loadProduction(
   new URL("../src/lib/customer-actions.ts", import.meta.url),
-  "utf8",
-);
-const output = ts.transpileModule(source, {
-  compilerOptions: {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-  },
-}).outputText;
-const { customerAction, reviewReportFromForm } = await import(
-  `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
 );
 
 test("sign out and review actions use real POST contracts with encoded identifiers", async () => {
@@ -72,17 +61,17 @@ test("upstream failures are never presented as a successful action", async () =>
         { status: 403 },
       ),
     ),
-    /Request rejected/,
+    (error) => error.code === "UNTRUSTED_ORIGIN" && error.status === 403,
   );
   await assert.rejects(
     customerAction(
       { kind: "logout" },
       async () => new Response("Offline", { status: 503 }),
     ),
-    /503/,
+    (error) => error.status === 503,
   );
   await assert.rejects(
     customerAction({ kind: "logout" }, async () => Response.json({})),
-    /response/i,
+    (error) => error.code === "INVALID_RESPONSE",
   );
 });
