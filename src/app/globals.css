@@ -480,6 +480,74 @@ form,
   border-radius: 0.75rem;
   background: var(--surface);
 }
+.notice-heading,
+.action-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.notice-heading {
+  justify-content: space-between;
+}
+.notice-heading > div,
+.notification-item {
+  min-width: 0;
+}
+.status-badge {
+  display: inline-flex;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.preference-grid,
+.referral-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 1rem;
+}
+.preference-card,
+.referral-metrics > div {
+  min-width: 0;
+  padding: 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--canvas);
+}
+.preference-card {
+  display: grid;
+  gap: 0.8rem;
+  align-content: start;
+}
+.referral-metrics {
+  margin: 0;
+}
+.referral-metrics dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.referral-metrics dd {
+  margin: 0.4rem 0 0;
+  font-size: 1.3rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.notification-diagnostics {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.notification-diagnostics summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.notification-diagnostics code {
+  overflow-wrap: anywhere;
+}
 .panel h2 {
   font-size: clamp(1.3rem, 2vw, 1.65rem);
 }
