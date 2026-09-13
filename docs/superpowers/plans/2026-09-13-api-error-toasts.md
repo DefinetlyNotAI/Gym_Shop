@@ -50,6 +50,18 @@ setMessage(presentApiError(error));
 
 The full audit remains open until every UI-accessible request family is migrated and tested, including authentication/MFA/recovery, subscriptions, wallet/referrals, partner verification, uploads, driver actions and all staff operations. Server-rendered page-load failures need their own appropriate error-page presentation rather than a browser toast before hydration. APS withdrawal capability remains separately unverified.
 
+## Explicit user acceptance gate: API error codes to polished toasts
+
+The user's additional request applies to every customer and staff UI workflow, not only the initial consumers. These checks remain open until evidence covers the remaining workflows:
+
+- [ ] Record each UI request family and its failure owner in the endpoint audit; no raw-code display or silently swallowed failure counts as migrated.
+- [ ] Give each known API error a concise English/Arabic title, a useful description explaining the consequence, and safe recovery guidance where applicable. Keep unknown codes, network failures and malformed responses readable without rendering arbitrary server messages.
+- [ ] Keep sanitized code/status diagnostics collapsed; never show private notes, tokens, credentials, stack traces or sensitive payload fields in toast content.
+- [ ] Verify a failed action produces one toast announcement, retains drafts and last confirmed state, restores pending controls, and does not retry a mutation automatically. Keep field-specific validation beside the affected input.
+- [ ] Inspect title/description/icon/dismiss spacing, wrapping, contrast, keyboard dismissal, screen-reader announcements, RTL and mobile stacking. Important errors persist until dismissed and do not steal focus.
+- [ ] Exercise validation, session expiry, permission denial, stale/conflicting state, rate limits and unavailable providers through the appropriate UI. Payment recovery must use authoritative status rather than suggesting a duplicate charge.
+- [ ] Run production-module regression tests and affected client lint/build checks; record the actual browser-tested workflows and remaining gaps before closing this gate.
+
 ## Commerce and fulfillment migration progress — 2026-09-13
 
 Customer cart/add-to-cart, newsletter/restock subscriptions, reward conversion and reorder now consume guarded production request helpers and the localized toast contract. Staff packing/dispatch/pickup/reassignment use actual confirmation flags. A synchronous action gate prevents overlapping submissions, restores pending controls in `finally`, and does not retry mutations. The owning hook keeps errors translated when language changes; already-toasted local feedback is not announced twice. Quantity edits use an explicit submit form rather than a request on every keystroke. Reward conversion retains its operation key after an uncertain failure while the amount is unchanged.
