@@ -85,6 +85,15 @@ Original dependency-free layouts add read badges, local category activity links,
 
 The user explicitly narrowed the active goal to finishing this current task and stopping, even with the broader v0.2 release incomplete. This task completion does not close the whole-site error-toast gate or release checklist. Authentication/security, verification/uploads, driver/staff consumers, role-correct server-rendered error pages and broader endpoint/provider acceptance remain open in the central audit.
 
+## Phone-verification migration progress — 2026-09-14
+
+- [x] Guard request acceptance/request ID/development code and require actual `verified: true`; preserve typed diagnostics and do not retry security attempts automatically.
+- [x] Add vetted phone/email verification guidance in both clients and a localized, labeled two-step customer form with pending controls, retained rejected drafts and newest-code/expiry guidance.
+- [x] Correct the browser-reproduced JSX phone-pattern bug and reviewer-found development-code delivery assurance; no remaining Critical/Important scoped review finding.
+- [x] Verify customer 50/staff 31 tests, both client lint/build checks, actual SIM code replacement/rejection/confirmation/persistence and failed-request recovery, keyboard dismissal and Arabic mobile no-overflow/44 px controls.
+
+The full v0.2 goal was subsequently resumed and remains active. This completes phone-verification UI migration only; remaining-consumer and whole-site/release acceptance checkboxes stay open. Real provider delivery and shared-session server-rendered settings error handling are not certified by this slice. See the central endpoint audit for exact browser evidence and remaining workflows.
+
 ## Initial implementation evidence
 
 The contract tests were observed failing before implementation, then passing in both independently built clients. A further non-JSON-response regression went red before `readApiData` was introduced; customer checkout/referral/quote shape tests went red against the unvalidated production helper before runtime guards were added. An array-valued checkout status was separately reproduced and rejected using strict equality. Known-code/status mapping and safe diagnostics are shared as identical source, not via an unavailable cross-repository package.
