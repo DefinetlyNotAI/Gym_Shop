@@ -218,6 +218,30 @@ const notices: Record<string, Copy> = {
     "Choose another available delivery option or store pickup.",
     "اختر خيار توصيل آخر متاحًا أو الاستلام من المتجر.",
   ),
+  PHONE_INVALID: copy(
+    "Check your phone number",
+    "راجع رقم هاتفك",
+    "Enter your Jordan phone number starting with +962, without spaces.",
+    "أدخل رقم هاتفك الأردني بدءًا بـ ‎+962 دون مسافات.",
+  ),
+  EMAIL_VERIFICATION_REQUIRED: copy(
+    "Verify your email first",
+    "تحقق من بريدك الإلكتروني أولًا",
+    "Complete email verification before requesting a phone verification code.",
+    "أكمل التحقق من بريدك الإلكتروني قبل طلب رمز التحقق من الهاتف.",
+  ),
+  PHONE_CODE_INVALID: copy(
+    "This code couldn't verify your phone",
+    "تعذّر التحقق من هاتفك بهذا الرمز",
+    "Use the latest six-digit code for this number. It may have expired or been replaced; repeated incorrect attempts invalidate it. Request a new code if needed.",
+    "استخدم أحدث رمز من ستة أرقام لهذا الرقم. ربما انتهت صلاحيته أو استُبدل؛ تُبطله المحاولات الخاطئة المتكررة. اطلب رمزًا جديدًا عند الحاجة.",
+  ),
+  PHONE_VERIFICATION_FAILED: copy(
+    "Phone verification couldn't be completed",
+    "تعذّر إكمال التحقق من الهاتف",
+    "Your phone verification is not confirmed. Check your account and the latest code before trying again; no attempt is retried automatically.",
+    "لم يتأكد التحقق من هاتفك. راجع حسابك وأحدث رمز قبل المحاولة مجددًا؛ لا تُعاد أي محاولة تلقائيًا.",
+  ),
   PHONE_VERIFICATION_REQUIRED: copy(
     "Verify your phone first",
     "تحقق من هاتفك أولًا",

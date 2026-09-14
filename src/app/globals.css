@@ -1179,6 +1179,39 @@ details > :not(summary) + :not(summary) {
   background: var(--surface);
 }
 
+.phone-verification-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+.phone-verification-form button {
+  margin-block-start: 1.75rem;
+  min-height: 44px;
+  white-space: normal;
+}
+.phone-code-step {
+  border-block-start: 1px solid var(--border);
+  margin-block-start: 1.5rem;
+  padding-block-start: 1.5rem;
+}
+.phone-simulation {
+  margin-block: 1rem;
+}
+.phone-simulation code {
+  font-size: 1.1rem;
+  letter-spacing: 0.15em;
+}
+@media (max-width: 640px) {
+  .phone-verification-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .phone-verification-form button {
+    margin-block-start: 0;
+    width: 100%;
+  }
+}
+
 .account-session-action {
   margin-block: 1rem 1.5rem;
 }
