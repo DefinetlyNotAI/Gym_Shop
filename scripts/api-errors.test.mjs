@@ -17,6 +17,22 @@ const { apiErrorFromPayload, errorNotice, appendNotice, readApiData } =
     `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
   );
 
+test("phone verification failures explain the specific recovery without exposing tokens", () => {
+  for (const [code, pattern] of [
+    ["PHONE_INVALID", /962|Jordan/i],
+    ["EMAIL_VERIFICATION_REQUIRED", /email/i],
+    ["PHONE_CODE_INVALID", /latest|expired|code/i],
+    ["PHONE_VERIFICATION_FAILED", /phone|verification/i],
+  ]) {
+    const notice = errorNotice(
+      apiErrorFromPayload({ error: { code, message: "private token" } }, 409),
+    );
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.doesNotMatch(JSON.stringify(notice), /private token/);
+  }
+});
+
 test("profile and address failures offer specific safe recovery", () => {
   for (const [code, pattern] of [
     ["PROFILE_UPDATE_FAILED", /profile/i],
