@@ -240,6 +240,37 @@ const notices: Record<string, Copy> = {
     "Check the assigned driver's account UUID and active status before dispatching.",
     "تحقق من معرّف حساب السائق وحالته النشطة قبل الإرسال.",
   ),
+  RETURN_INSPECTION_INVALID: copy(
+    "Review the return inspection",
+    "راجع فحص المرتجع",
+    "Enter the returned order reference, choose its condition, and provide a clear inspection reason.",
+    "أدخل مرجع الطلب المرتجع، واختر حالته، وقدّم سبباً واضحاً للفحص.",
+  ),
+  RETURN_NOT_PENDING: copy(
+    "This order has no pending return",
+    "لا يوجد مرتجع معلّق لهذا الطلب",
+    "Refresh the inventory page and confirm the order is waiting for return inspection before recording a condition.",
+    "حدّث صفحة المخزون وتأكد من أن الطلب بانتظار فحص المرتجع قبل تسجيل حالته.",
+    "refresh",
+  ),
+  DISCREPANCY_INVALID: copy(
+    "Review the cash discrepancy",
+    "راجع فرق النقد",
+    "Check the active driver UUID, integer fils amounts, source reference, and explanation before recording the discrepancy.",
+    "تحقق من معرّف المندوب النشط، والمبالغ الصحيحة بالفلس، ومرجع المصدر، والتوضيح قبل تسجيل الفرق.",
+  ),
+  TEMPLATE_INVALID: copy(
+    "Review the notification template",
+    "راجع قالب الإشعار",
+    "Use a versioned event name, select a channel and language, and provide valid subject, body, and variable fields.",
+    "استخدم اسم حدث يتضمن الإصدار، واختر القناة واللغة، وأدخل حقول العنوان والنص والمتغيرات بشكل صحيح.",
+  ),
+  TEMPLATE_VARIABLE_NOT_ALLOWED: copy(
+    "A template variable is not allowed",
+    "أحد متغيرات القالب غير مسموح",
+    "Add every {{placeholder}} used by the subject or body to the allowed-variable list, or remove it from the template.",
+    "أضف كل عنصر نائب مستخدم في العنوان أو النص إلى قائمة المتغيرات المسموحة، أو أزله من القالب.",
+  ),
   PICKUP_PIN_INVALID: copy(
     "Check the pickup PIN",
     "تحقق من رمز الاستلام",

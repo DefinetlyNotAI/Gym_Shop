@@ -90,6 +90,21 @@ test("damage claim decisions show specific, non-technical recovery", () => {
   }
 });
 
+test("return, discrepancy and template errors show actionable guidance", () => {
+  for (const [code, pattern] of [
+    ["RETURN_INSPECTION_INVALID", /order|return|reason/i],
+    ["RETURN_NOT_PENDING", /pending|return/i],
+    ["DISCREPANCY_INVALID", /driver|amount|reference/i],
+    ["TEMPLATE_INVALID", /template|event|body/i],
+    ["TEMPLATE_VARIABLE_NOT_ALLOWED", /variable|placeholder/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 422));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.equal(notice.title.en.includes(code), false);
+  }
+});
+
 test("non-JSON failures retain HTTP guidance and malformed success is not confirmed", async () => {
   for (const status of [403, 503]) {
     await assert.rejects(

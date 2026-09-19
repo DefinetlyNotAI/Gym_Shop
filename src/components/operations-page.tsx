@@ -387,6 +387,12 @@ export async function OperationsPage({
           canReviewPayouts={["CTO", "SUPER_ADMIN", "FINANCE_STAFF"].includes(
             actor.role,
           )}
+          canReconcileCash={["CTO", "SUPER_ADMIN", "FINANCE_STAFF"].includes(
+            actor.role,
+          )}
+          canManageNotifications={["CTO", "SUPER_ADMIN", "ADMIN"].includes(
+            actor.role,
+          )}
         />
       ) : null}
     </main>

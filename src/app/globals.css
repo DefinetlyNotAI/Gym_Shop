@@ -1071,6 +1071,85 @@ details > :not(summary) + :not(summary) {
 .operations-console > section > h2 {
   font-size: 1.4rem;
 }
+.operation-create-card {
+  display: grid;
+  gap: 1.25rem;
+  overflow: hidden;
+  padding: clamp(1.1rem, 2.5vw, 1.6rem);
+  border: 1px solid #c9d5c5;
+  border-radius: 0.8rem;
+  background:
+    linear-gradient(135deg, rgba(237, 244, 233, 0.94), rgba(253, 252, 247, 0.98) 58%),
+    var(--surface);
+  box-shadow: 0 0.8rem 2.2rem rgba(40, 62, 45, 0.07);
+}
+.operation-finance-card {
+  border-color: #d8cfb9;
+  background: linear-gradient(135deg, #f8f4e9, #fffdf8 60%);
+}
+.operation-template-card {
+  border-color: #c9d1dc;
+  background: linear-gradient(135deg, #f0f4f7, #fdfdfb 60%);
+}
+.operation-create-heading {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.8fr) minmax(18rem, 1.2fr);
+  gap: 1rem 2rem;
+  align-items: end;
+}
+.operation-create-heading h3 {
+  margin-block-start: 0.25rem;
+  font-size: clamp(1.15rem, 2vw, 1.45rem);
+}
+.operation-create-heading p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.operation-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+.operation-form-grid label {
+  align-content: start;
+  margin: 0;
+  color: #34463a;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+.operation-form-grid :is(input, select, textarea) {
+  margin-block-start: 0.35rem;
+  border-color: #b8c6b6;
+  background: rgba(255, 255, 252, 0.9);
+}
+.operation-wide-field,
+.operation-submit-row {
+  grid-column: 1 / -1;
+}
+.operation-submit-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding-block-start: 0.25rem;
+}
+.operation-submit-row small {
+  max-width: 54ch;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.operation-submit-row button {
+  min-width: 11rem;
+}
+.operation-result {
+  min-height: 1.4em;
+  margin: 0;
+  color: #355c40;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
 .list article > form {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
   align-items: end;
@@ -1147,6 +1226,21 @@ details > :not(summary) + :not(summary) {
   font-variant-numeric: tabular-nums;
 }
 @media (max-width: 900px) {
+  .operation-create-heading,
+  .operation-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .operation-wide-field,
+  .operation-submit-row {
+    grid-column: auto;
+  }
+  .operation-submit-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .operation-submit-row button {
+    width: 100%;
+  }
   .staff-workspace.has-sidebar {
     display: block;
   }

@@ -27,6 +27,11 @@ import {
   AnalyticsDashboard,
   type OperationalDashboard,
 } from "@/components/analytics-dashboard";
+import {
+  CashDiscrepancyForm,
+  InventoryReturnInspection,
+  NotificationTemplateForm,
+} from "@/components/backoffice-create-actions";
 
 type RecordRow = Record<string, unknown>;
 type Props = {
@@ -52,6 +57,8 @@ type Props = {
   canModerateReviews: boolean;
   canReviewVerification: boolean;
   canReviewPayouts: boolean;
+  canReconcileCash: boolean;
+  canManageNotifications: boolean;
 };
 
 async function mutate(path: string, method: string, body: unknown) {
@@ -112,6 +119,7 @@ export function OperationsConsole(props: Props) {
       {props.section === "inventory" ? (
         <section id="inventory">
           <h2>Inventory ledger / سجل المخزون</h2>
+          {props.canAdjustInventory ? <InventoryReturnInspection /> : null}
           <div className="list">
             {props.inventory.map((item) => (
               <article key={String(item.variant_id)}>
@@ -208,6 +216,7 @@ export function OperationsConsole(props: Props) {
       {props.section === "finance" ? (
         <section id="finance">
           <h2>Finance & reconciliation / المالية والمطابقة</h2>
+          {props.canReconcileCash ? <CashDiscrepancyForm /> : null}
           <h3>Refund obligations</h3>
           <div className="list">
             {props.refunds.length ? (
@@ -321,6 +330,7 @@ export function OperationsConsole(props: Props) {
       {props.section === "notifications" ? (
         <section id="notifications">
           <h2>Notification templates / قوالب الإشعارات</h2>
+          {props.canManageNotifications ? <NotificationTemplateForm /> : null}
           <div className="list">
             {props.templates.map((template) => (
               <article key={String(template.id)}>
