@@ -2,7 +2,7 @@
 
 API, domain logic, jobs, persistence, payments, and notification orchestration. Run `npm install`, then `npm run dev`; simulation mode is supplied by the root runner.
 
-Local port: `3001`.
+Local port: `5000`.
 
 ## v0.2 release evidence
 

@@ -23,7 +23,7 @@ The R2 bucket CORS policy must allow only the exact storefront and admin origins
 
 ## Local simulation
 
-`npm run simmode` starts all three applications on ports 3000, 3001, and 3002. It overrides inherited provider/database credentials, creates an in-memory PGlite database, applies every migration, loads deterministic fixtures, simulates Amazon Payment Services, and captures email/WhatsApp work in the in-memory notification records. No `.env` file or external account is used. The simulation banner and role switchers identify the environment, and all state disappears when the process stops.
+Local simulation runs the storefront on port 3030, the API on port 5000, and the staff application on port 4000. It overrides inherited provider/database credentials, creates an in-memory PGlite database, applies every migration, loads deterministic fixtures, simulates Amazon Payment Services, and captures email/WhatsApp work in the in-memory notification records. No `.env` file or external account is used. The simulation banner and role switchers identify the environment, and all state disappears when the process stops.
 
 Simulation is not production evidence. Preview and production reject `SIM_MODE`, fail when required provider/storage/security variables are absent, and require the production APS endpoint in production.
 

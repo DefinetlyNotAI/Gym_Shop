@@ -34,9 +34,9 @@ describe("browser request boundaries", () => {
   });
 
   it("rejects missing, cross-site, and wrong-surface origins", () => {
-    expect(() => requireTrustedMutation(new Request("http://localhost:3001/api/v1/cart", { method: "PUT" }))).toThrow("ORIGIN_REQUIRED");
-    expect(() => requireTrustedMutation(new Request("http://localhost:3001/api/v1/cart", { method: "PUT", headers: { origin: "https://evil.test", "sec-fetch-site": "cross-site" } }))).toThrow("FETCH_SITE_REJECTED");
-    expect(() => requireTrustedMutation(new Request("http://localhost:3001/api/v1/cart", { method: "PUT", headers: { origin: "http://localhost:3002", "sec-fetch-site": "same-site" } }))).toThrow("ORIGIN_REJECTED");
+    expect(() => requireTrustedMutation(new Request("http://localhost:5000/api/v1/cart", { method: "PUT" }))).toThrow("ORIGIN_REQUIRED");
+    expect(() => requireTrustedMutation(new Request("http://localhost:5000/api/v1/cart", { method: "PUT", headers: { origin: "https://evil.test", "sec-fetch-site": "cross-site" } }))).toThrow("FETCH_SITE_REJECTED");
+    expect(() => requireTrustedMutation(new Request("http://localhost:5000/api/v1/cart", { method: "PUT", headers: { origin: "http://localhost:4000", "sec-fetch-site": "same-site" } }))).toThrow("ORIGIN_REJECTED");
   });
 
   it("protects every browser mutation and classifies every origin-checked route", async () => {

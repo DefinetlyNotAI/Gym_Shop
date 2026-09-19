@@ -30,17 +30,17 @@ describe("Amazon Payment Services provider", () => {
   it("creates a local hosted-payment handoff without provider credentials", async () => {
     process.env.APP_ENV = "local";
     process.env.SIM_MODE = "1";
-    process.env.STOREFRONT_ORIGIN = "http://localhost:3000";
+    process.env.STOREFRONT_ORIGIN = "http://localhost:3030";
     const { createHostedPayment } = await import("./provider");
     const payment = await createHostedPayment({
       operationKey: "op-1",
       amountFils: 20500,
-      returnUrl: "http://localhost:3000/api/v1/payments/return",
+      returnUrl: "http://localhost:3030/api/v1/payments/return",
       purpose: "ORDER",
       entityReference: "ord_example",
       customerEmail: "buyer@example.com",
     });
-    expect(payment.hostedUrl).toBe("http://localhost:3000/api/v1/payments/simulate");
+    expect(payment.hostedUrl).toBe("http://localhost:3030/api/v1/payments/simulate");
     expect(payment.formFields).toMatchObject({ merchant_reference: "sim_ord_example", outcome: "success" });
   });
 

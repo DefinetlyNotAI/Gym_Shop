@@ -66,8 +66,8 @@ describe("runtime configuration", () => {
   });
 
   it("requires exact and distinct application origins with an admin-scoped WebAuthn RP ID", () => {
-    expect(() => parseRuntimeConfig({ STOREFRONT_ORIGIN: "http://localhost:3000/path" })).toThrow("exact origin");
-    expect(() => parseRuntimeConfig({ ADMIN_ORIGIN: "http://localhost:3000" })).toThrow("distinct");
+    expect(() => parseRuntimeConfig({ STOREFRONT_ORIGIN: "http://localhost:3030/path" })).toThrow("exact origin");
+    expect(() => parseRuntimeConfig({ ADMIN_ORIGIN: "http://localhost:3030" })).toThrow("distinct");
     expect(() => parseRuntimeConfig({ WEBAUTHN_RP_ID: "unrelated.test" })).toThrow("admin host");
   });
 

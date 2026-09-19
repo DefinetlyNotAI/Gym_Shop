@@ -362,7 +362,7 @@ describe("v0.2 release journeys", () => {
         position: 0,
       });
       const response = await publicMediaGET(
-        new Request(`http://localhost:3000/media/${upload.id}`),
+        new Request(`http://localhost:3030/media/${upload.id}`),
         { params: Promise.resolve({ id: upload.id }) },
       );
       expect(response.status).toBe(200);
