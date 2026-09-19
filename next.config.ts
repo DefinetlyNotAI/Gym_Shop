@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 function configuredApiOrigin(): string {
-  const value = process.env.API_ORIGIN ?? "https://api.example.com";
+  const value =
+    process.env.API_ORIGIN ??
+    (process.env.NODE_ENV === "development"
+      ? "http://localhost:5000"
+      : "https://api.example.com");
   const url = new URL(value);
   if (url.origin !== value || url.username || url.password) throw new Error("API_ORIGIN must be an exact origin without credentials or a path");
   if (process.env.NODE_ENV === "production" && url.protocol !== "https:") throw new Error("Production API_ORIGIN must use HTTPS");

@@ -15,7 +15,7 @@ const output = ts.transpileModule(source, {
 const { simulateHostedPayment } = await import(
   `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
 );
-const origin = "http://localhost:3000";
+const origin = "http://localhost:3030";
 const result = {
   orderId: "ord_test",
   paymentUrl: `${origin}/api/v1/payments/simulate`,
