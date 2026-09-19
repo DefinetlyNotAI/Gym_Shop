@@ -1,1 +1,39 @@
-import{redirect}from"next/navigation";import{SupportPanel}from"@/components/support-panel";import{apiGet,getSession}from"@/lib/api";export const dynamic="force-dynamic";export default async function Restricted(){const account=await getSession();if(!account)redirect("/account");if(!["SUSPENDED","DELETION_PENDING"].includes(account.status))redirect("/account");const restriction=await apiGet<{deletionDueAt:string|null}>("/api/v1/account/restriction");return <main className="page"><h1>Restricted access / وصول مقيّد</h1><p>Shopping and ordinary account features are disabled. Support and your data export remain available here.</p>{restriction!.deletionDueAt?<section className="panel"><h2>Deletion pending</h2><p>Your account is scheduled for irreversible de-identification at <time dateTime={restriction!.deletionDueAt}>{new Date(restriction!.deletionDueAt).toLocaleString("en-JO",{timeZone:"Asia/Amman",dateStyle:"full",timeStyle:"long"})}</time>. Transaction and legally required records remain in minimized form.</p></section>:null}<div className="quick-grid"><a href="/api/v1/account/export">Download my data / تنزيل بياناتي</a></div><SupportPanel/></main>}
+import { SupportPanel } from "@/components/support-panel";
+import { apiGet } from "@/lib/api";
+import { requireCustomerSession } from "@/lib/customer-session";
+export const dynamic = "force-dynamic";
+export default async function Restricted() {
+  await requireCustomerSession("restricted");
+  const restriction = await apiGet<{ deletionDueAt: string | null }>(
+    "/api/v1/account/restriction",
+  );
+  return (
+    <main className="page">
+      <h1>Restricted access / وصول مقيّد</h1>
+      <p>
+        Shopping and ordinary account features are disabled. Support and your
+        data export remain available here.
+      </p>
+      {restriction!.deletionDueAt ? (
+        <section className="panel">
+          <h2>Deletion pending</h2>
+          <p>
+            Your account is scheduled for irreversible de-identification at{" "}
+            <time dateTime={restriction!.deletionDueAt}>
+              {new Date(restriction!.deletionDueAt).toLocaleString("en-JO", {
+                timeZone: "Asia/Amman",
+                dateStyle: "full",
+                timeStyle: "long",
+              })}
+            </time>
+            . Transaction and legally required records remain in minimized form.
+          </p>
+        </section>
+      ) : null}
+      <div className="quick-grid">
+        <a href="/api/v1/account/export">Download my data / تنزيل بياناتي</a>
+      </div>
+      <SupportPanel />
+    </main>
+  );
+}

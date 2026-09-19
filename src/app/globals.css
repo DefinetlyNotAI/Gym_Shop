@@ -1215,6 +1215,22 @@ details > :not(summary) + :not(summary) {
 .account-session-action {
   margin-block: 1rem 1.5rem;
 }
+.account-error-page {
+  min-height: 55vh;
+  place-content: center;
+}
+.account-error-card {
+  width: min(100%, 44rem);
+  margin-inline: auto;
+  border-inline-start: 4px solid var(--accent);
+}
+.staff-account-route {
+  max-width: 48rem;
+  margin-block-start: 1.5rem;
+}
+.staff-account-route .primary {
+  width: fit-content;
+}
 .checkout-fields {
   display: grid;
   gap: 1rem;

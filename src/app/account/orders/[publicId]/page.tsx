@@ -1,18 +1,16 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ReorderButton } from "@/components/reorder-button";
 import { CancelOrder } from "@/components/cancel-order";
-import { apiGet, getSession } from "@/lib/api";
+import { apiGet } from "@/lib/api";
+import { requireCustomerSession } from "@/lib/customer-session";
 export const dynamic = "force-dynamic";
 export default async function OrderDetail({
   params,
 }: {
   params: Promise<{ publicId: string }>;
 }) {
-  const account = await getSession();
-  if (!account) redirect("/account");
-  if (["SUSPENDED", "DELETION_PENDING"].includes(account.status))
-    redirect("/account/restricted");
+  await requireCustomerSession();
   const publicId = (await params).publicId;
   const detail = await apiGet<{
     order: Record<string, unknown>;
