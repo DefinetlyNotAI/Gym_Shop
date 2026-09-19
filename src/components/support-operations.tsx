@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
-import { editSupportMessage } from "@/lib/support-actions";
+import { decideSupportClaim, editSupportMessage } from "@/lib/support-actions";
 import {
   ApiFailure,
   apiErrorFromPayload,
@@ -32,6 +32,17 @@ type Conversation = {
   subject: string;
   status: string;
   messages: Message[];
+  claim: {
+    id: string;
+    status: string;
+    order_line_id: string;
+    quantity: number;
+    description: string;
+    customer_safe_reason: string | null;
+    sku: string;
+    name_snapshot: unknown;
+    replacement_order_public_id: string | null;
+  } | null;
 };
 type QueueUpdate = {
   status?: string;
@@ -267,6 +278,25 @@ export function SupportOperations({
       });
     });
   }
+  function decideClaim(form: HTMLFormElement) {
+    if (!selected?.claim) return;
+    const ticketId = selected.public_id;
+    const claimId = selected.claim.id;
+    const data = new FormData(form);
+    void perform(async () => {
+      await decideSupportClaim(claimId, {
+        decision: String(data.get("decision")) as
+          "REPLACE" | "REFUND" | "REJECT",
+        customerReason: String(data.get("customerReason") ?? ""),
+        privateNotes: String(data.get("privateNotes") ?? ""),
+      });
+      form.reset();
+      await afterMutation(ticketId, {
+        en: "Damage claim decision recorded.",
+        ar: "تم تسجيل قرار مطالبة التلف.",
+      });
+    });
+  }
   return (
     <section id="support" className="support-workspace" aria-busy={busy}>
       <h2>{text("Support operations", "عمليات الدعم")}</h2>
@@ -314,6 +344,113 @@ export function SupportOperations({
               </small>
               <h3 dir="auto">{selected.subject}</h3>
             </header>
+            {selected.claim ? (
+              <section
+                className="support-claim"
+                aria-labelledby="support-claim-title"
+              >
+                <div className="support-claim-heading">
+                  <div>
+                    <p className="eyebrow">
+                      {text("Damage claim", "مطالبة تلف")}
+                    </p>
+                    <h4 id="support-claim-title">
+                      {selected.claim.sku} · {text("Quantity", "الكمية")}{" "}
+                      {selected.claim.quantity}
+                    </h4>
+                  </div>
+                  <span className="status-badge">{selected.claim.status}</span>
+                </div>
+                <p className="support-claim-description" dir="auto">
+                  {selected.claim.description}
+                </p>
+                {selected.claim.customer_safe_reason ? (
+                  <div className="support-claim-outcome">
+                    <strong>
+                      {text("Customer outcome", "النتيجة للعميل")}
+                    </strong>
+                    <p dir="auto">{selected.claim.customer_safe_reason}</p>
+                    {selected.claim.replacement_order_public_id ? (
+                      <small>
+                        {text("Replacement order", "طلب الاستبدال")} ·{" "}
+                        {selected.claim.replacement_order_public_id}
+                      </small>
+                    ) : null}
+                  </div>
+                ) : null}
+                {["REQUESTED", "UNDER_REVIEW"].includes(
+                  selected.claim.status,
+                ) ? (
+                  <form
+                    className="support-claim-decision"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      decideClaim(event.currentTarget);
+                    }}
+                  >
+                    <div className="support-decision-warning">
+                      <strong>
+                        {text("Decision required", "القرار مطلوب")}
+                      </strong>
+                      <p>
+                        {text(
+                          "Replacement reserves stock; refund creates a finance request. Confirm the evidence before submitting.",
+                          "الاستبدال يحجز المخزون، والاسترداد ينشئ طلباً مالياً. تحقق من الأدلة قبل الإرسال.",
+                        )}
+                      </p>
+                    </div>
+                    <label>
+                      {text("Decision", "القرار")}
+                      <select
+                        name="decision"
+                        defaultValue=""
+                        required
+                        disabled={busy}
+                      >
+                        <option value="" disabled>
+                          {text("Select a decision", "اختر قراراً")}
+                        </option>
+                        <option value="REPLACE">
+                          {text("Replace item", "استبدال المنتج")}
+                        </option>
+                        <option value="REFUND">
+                          {text("Request refund", "طلب استرداد")}
+                        </option>
+                        <option value="REJECT">
+                          {text("Reject claim", "رفض المطالبة")}
+                        </option>
+                      </select>
+                    </label>
+                    <label>
+                      {text("Customer-facing reason", "السبب الظاهر للعميل")}
+                      <textarea
+                        name="customerReason"
+                        required
+                        minLength={3}
+                        maxLength={2000}
+                        disabled={busy}
+                        dir="auto"
+                      />
+                    </label>
+                    <label>
+                      {text("Private decision notes", "ملاحظات القرار الخاصة")}
+                      <textarea
+                        name="privateNotes"
+                        maxLength={5000}
+                        disabled={busy}
+                        dir="auto"
+                      />
+                    </label>
+                    <button className="primary" disabled={busy}>
+                      {text(
+                        busy ? "Recording decision…" : "Record final decision",
+                        busy ? "جارٍ تسجيل القرار…" : "تسجيل القرار النهائي",
+                      )}
+                    </button>
+                  </form>
+                ) : null}
+              </section>
+            ) : null}
             <div className="support-messages">
               {selected.messages.map((item) => (
                 <ConversationMessage

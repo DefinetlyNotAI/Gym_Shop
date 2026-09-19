@@ -76,6 +76,20 @@ test("commerce and fulfillment codes explain the specific action to correct", ()
   }
 });
 
+test("damage claim decisions show specific, non-technical recovery", () => {
+  for (const [code, pattern] of [
+    ["CLAIM_DECISION_INVALID", /decision|reason/i],
+    ["CLAIM_NOT_DECIDABLE", /decided|refresh|state/i],
+    ["REPLACEMENT_STOCK_UNAVAILABLE", /stock|replacement/i],
+    ["REFUND_EXCEEDS_COLLECTED", /refund|collected/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 422));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.equal(notice.title.en.includes(code), false);
+  }
+});
+
 test("non-JSON failures retain HTTP guidance and malformed success is not confirmed", async () => {
   for (const status of [403, 503]) {
     await assert.rejects(

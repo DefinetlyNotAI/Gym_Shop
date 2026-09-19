@@ -2,9 +2,56 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadProduction } from "./load-production.mjs";
 
-const { editSupportMessage } = await loadProduction(
+const { decideSupportClaim, editSupportMessage } = await loadProduction(
   new URL("../src/lib/support-actions.ts", import.meta.url),
 );
+
+test("claim decisions use the dedicated encoded route and require confirmed status", async () => {
+  let call;
+  const result = await decideSupportClaim(
+    "claim/1",
+    {
+      decision: "REJECT",
+      customerReason: "The evidence does not show delivery damage.",
+      privateNotes: "Reviewed dispatch images.",
+    },
+    async (url, init) => {
+      call = { url, ...init };
+      return Response.json({ data: { status: "REJECTED" } });
+    },
+  );
+  assert.deepEqual(result, { status: "REJECTED" });
+  assert.equal(call.url, "/api/v1/admin/support/claims/claim%2F1/decision");
+  assert.equal(call.method, "POST");
+  assert.deepEqual(JSON.parse(call.body), {
+    decision: "REJECT",
+    customerReason: "The evidence does not show delivery damage.",
+    privateNotes: "Reviewed dispatch images.",
+  });
+});
+
+test("claim decisions reject unsupported input and malformed confirmations", async () => {
+  let calls = 0;
+  await assert.rejects(
+    decideSupportClaim(
+      "claim",
+      { decision: "DELETE", customerReason: "Unsupported decision." },
+      async () => {
+        calls++;
+        return Response.json({ data: { status: "REFUND_REQUESTED" } });
+      },
+    ),
+  );
+  assert.equal(calls, 0);
+  await assert.rejects(
+    decideSupportClaim(
+      "claim",
+      { decision: "REFUND", customerReason: "Refund approved for damage." },
+      async () => Response.json({ data: {} }),
+    ),
+    (error) => error.code === "INVALID_RESPONSE",
+  );
+});
 
 test("staff message editing uses PATCH, encoded identifiers and a trimmed body", async () => {
   let call;
