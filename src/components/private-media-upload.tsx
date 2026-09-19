@@ -1,6 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useLanguage } from "@/components/language-provider";
+import {
+  ApiFailure,
+  apiErrorFromPayload,
+  presentApiError,
+} from "@/lib/api-errors";
 
 function hex(bytes: ArrayBuffer) {
   return Array.from(new Uint8Array(bytes), (byte) =>
@@ -16,15 +22,21 @@ function base64(bytes: ArrayBuffer) {
 export function PrivateMediaUpload({
   onUploaded,
   accept = "image/jpeg,image/png,image/webp",
+  required = false,
 }: {
   onUploaded: (id: string) => void;
   accept?: string;
+  required?: boolean;
 }) {
+  const { text } = useLanguage();
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+
   async function upload() {
     if (!file) return;
-    setMessage("Uploading…");
+    setBusy(true);
+    setMessage(text("Uploading…", "جارٍ الرفع…"));
     try {
       const digest = await crypto.subtle.digest(
         "SHA-256",
@@ -39,9 +51,14 @@ export function PrivateMediaUpload({
           sha256: hex(digest),
         }),
       });
-      const created = await create.json();
-      if (!create.ok)
-        throw new Error(created.error?.code ?? "UPLOAD_CREATE_FAILED");
+      const created = await create.json().catch(() => null);
+      if (!create.ok) throw apiErrorFromPayload(created, create.status);
+      if (
+        typeof created?.data?.id !== "string" ||
+        typeof created?.data?.uploadUrl !== "string"
+      ) {
+        throw new ApiFailure("INVALID_RESPONSE", create.status);
+      }
       const put = await fetch(created.data.uploadUrl, {
         method: "PUT",
         headers: {
@@ -50,32 +67,47 @@ export function PrivateMediaUpload({
         },
         body: file,
       });
-      if (!put.ok) throw new Error("UPLOAD_TRANSFER_FAILED");
+      if (!put.ok) throw new ApiFailure("UPLOAD_TRANSFER_FAILED", put.status);
       const finalize = await fetch("/api/v1/media", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ finalize: true, id: created.data.id }),
       });
-      const finalized = await finalize.json();
-      if (!finalize.ok)
-        throw new Error(finalized.error?.code ?? "UPLOAD_FINALIZE_FAILED");
+      const finalized = await finalize.json().catch(() => null);
+      if (!finalize.ok) throw apiErrorFromPayload(finalized, finalize.status);
+      if (typeof finalized?.data?.ready !== "boolean") {
+        throw new ApiFailure("INVALID_RESPONSE", finalize.status);
+      }
       onUploaded(created.data.id);
+      setFile(null);
       setMessage(
         finalized.data.ready
-          ? "Upload ready."
-          : "Upload received and awaiting its security scan.",
+          ? text("Image attached.", "تم إرفاق الصورة.")
+          : text(
+              "Image received and awaiting its security scan.",
+              "تم استلام الصورة وهي بانتظار الفحص الأمني.",
+            ),
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upload failed");
+      setMessage(presentApiError(error));
+    } finally {
+      setBusy(false);
     }
   }
+
   return (
     <div className="private-media-upload">
       <label>
-        Private evidence (optional) / إثبات خاص (اختياري)
+        {text(
+          required
+            ? "Private evidence (required)"
+            : "Private evidence (optional)",
+          required ? "دليل خاص (مطلوب)" : "دليل خاص (اختياري)",
+        )}
         <input
           type="file"
           accept={accept}
+          disabled={busy}
           onChange={(event) => setFile(event.target.files?.[0] ?? null)}
         />
       </label>
@@ -83,9 +115,12 @@ export function PrivateMediaUpload({
         type="button"
         className="secondary"
         onClick={upload}
-        disabled={!file}
+        disabled={!file || busy}
       >
-        Upload private evidence / رفع إثبات خاص
+        {text(
+          busy ? "Uploading…" : "Attach image",
+          busy ? "جارٍ الرفع…" : "إرفاق صورة",
+        )}
       </button>
       <small aria-live="polite">{message}</small>
     </div>

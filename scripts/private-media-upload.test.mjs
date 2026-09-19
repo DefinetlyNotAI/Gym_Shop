@@ -21,6 +21,15 @@ for (const name of ["react", "react/jsx-runtime"])
     `from "${name}"`,
     `from "${import.meta.resolve(name)}"`,
   );
+const languageStub = `data:text/javascript,${encodeURIComponent(
+  "export function useLanguage(){return {text:(english)=>english}}",
+)}`;
+const apiErrorsStub = `data:text/javascript,${encodeURIComponent(
+  "export class ApiFailure extends Error{}; export function apiErrorFromPayload(){return new ApiFailure()}; export function presentApiError(){return 'Upload failed.'}",
+)}`;
+output = output
+  .replace('from "@/components/language-provider"', `from "${languageStub}"`)
+  .replace('from "@/lib/api-errors"', `from "${apiErrorsStub}"`);
 const { PrivateMediaUpload } = await import(
   `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
 );

@@ -1369,3 +1369,344 @@ details > :not(summary) + :not(summary) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Order detail and damage-care flow */
+.order-detail-page {
+  max-width: 68rem;
+}
+.order-detail-heading,
+.claim-heading,
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.order-detail-heading h1 {
+  margin-block-start: 0.2rem;
+  font-size: clamp(1.4rem, 4vw, 2.25rem);
+}
+.order-summary {
+  background:
+    linear-gradient(135deg, #eef3ec 0, transparent 52%),
+    var(--surface);
+}
+.order-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+.order-metrics > div {
+  padding: 1rem;
+  border-inline-end: 1px solid var(--border);
+}
+.order-metrics > div:last-child {
+  border-inline-end: 0;
+}
+.order-metrics dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.order-metrics dd {
+  margin: 0.25rem 0 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.order-shipment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--surface);
+}
+.order-shipment span,
+.order-shipment code {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.order-shipment code {
+  grid-column: 1 / -1;
+}
+.section-heading > span {
+  display: grid;
+  place-items: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  border-radius: 999px;
+  background: var(--raised);
+  font-weight: 700;
+}
+.order-item-list {
+  display: grid;
+  border-block-start: 1px solid var(--border);
+}
+.order-item-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(7rem, auto);
+  gap: 1rem;
+  align-items: center;
+  padding-block: 1rem;
+  border-block-end: 1px solid var(--border);
+}
+.order-item-list article:last-child {
+  border-block-end: 0;
+}
+.order-item-list article > div {
+  display: grid;
+  gap: 0.15rem;
+}
+.order-item-list article > strong:last-child {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.claim-panel {
+  border-color: #becdbc;
+  box-shadow: 0 12px 35px #26322d0d;
+}
+.claim-form,
+.claim-evidence,
+.claim-confirmation {
+  display: grid;
+  gap: 1rem;
+}
+.claim-description {
+  grid-column: 1 / -1;
+}
+.claim-description small {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+.claim-evidence {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--canvas);
+}
+.claim-evidence-count {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding-inline-start: 0.8rem;
+  border-radius: 0.5rem;
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 600;
+}
+.claim-confirmation {
+  padding: 1.25rem;
+  border-inline-start: 4px solid var(--accent);
+  border-radius: 0.65rem;
+  background: var(--raised);
+}
+.claim-confirmation .secondary,
+.claim-closed .secondary,
+.claim-form > .primary {
+  justify-self: start;
+}
+.order-timeline ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.order-timeline li {
+  display: grid;
+  grid-template-columns: 0.85rem minmax(0, 1fr);
+  gap: 0.8rem;
+  min-height: 3.6rem;
+}
+.order-timeline li > span {
+  position: relative;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-block-start: 0.45rem;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--surface);
+}
+.order-timeline li:not(:last-child) > span::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 0.65rem;
+  inset-inline-start: 50%;
+  width: 1px;
+  height: 2.5rem;
+  background: var(--border);
+}
+.order-timeline li > div {
+  display: grid;
+  gap: 0.1rem;
+}
+.order-timeline time {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+@media (max-width: 680px) {
+  .order-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .order-metrics > div {
+    border-block-end: 1px solid var(--border);
+  }
+  .order-item-list article {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .order-item-list article > strong:last-child {
+    grid-column: 1 / -1;
+    text-align: start;
+  }
+  .claim-form .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .claim-description {
+    grid-column: auto;
+  }
+  .claim-form > .primary,
+  .claim-confirmation .secondary,
+  .claim-closed .secondary {
+    width: 100%;
+  }
+}
+
+/* Customer support workspace */
+.support-center,
+.support-history,
+.support-customer-conversation,
+.support-customer-messages,
+.support-customer-reply {
+  display: grid;
+  gap: 1rem;
+}
+.support-create > div:first-child {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 64ch;
+}
+.support-message-field {
+  grid-column: 1 / -1;
+}
+.support-create form > .primary {
+  justify-self: start;
+}
+.support-history-heading,
+.support-customer-conversation > header,
+.support-customer-message > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.support-customer-layout {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.8fr) minmax(0, 2fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.support-customer-list {
+  display: grid;
+  gap: 0.65rem;
+}
+.support-customer-ticket.secondary {
+  display: grid;
+  justify-content: stretch;
+  gap: 0.2rem;
+  height: auto;
+  padding: 1rem;
+  text-align: start;
+  white-space: normal;
+}
+.support-customer-ticket span,
+.support-customer-ticket small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.support-customer-ticket.is-selected {
+  border-color: var(--accent);
+  background: var(--raised);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+[dir="rtl"] .support-customer-ticket.is-selected {
+  box-shadow: inset -3px 0 0 var(--accent);
+}
+.customer-claim-status {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border: 1px solid #becdbc;
+  border-radius: 0.7rem;
+  background:
+    linear-gradient(145deg, #eef3ec 0, transparent 55%),
+    var(--surface);
+}
+.customer-claim-status h4 {
+  margin: 0.2rem 0 0;
+}
+.customer-claim-status > p,
+.claim-customer-outcome {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--field);
+}
+.claim-customer-outcome {
+  display: grid;
+  gap: 0.35rem;
+  border-inline-start: 4px solid var(--accent);
+  background: var(--raised);
+}
+.support-customer-message {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--canvas);
+}
+.support-customer-message time {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.support-customer-message > p {
+  color: var(--text);
+  white-space: pre-wrap;
+}
+.support-customer-empty {
+  min-height: 14rem;
+  place-content: center;
+  text-align: center;
+}
+.support-customer-reply {
+  padding-block-start: 1rem;
+  border-block-start: 1px solid var(--border);
+}
+.support-customer-reply button,
+.support-customer-conversation > button {
+  justify-self: start;
+}
+@media (max-width: 760px) {
+  .support-customer-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .support-create .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .support-message-field {
+    grid-column: auto;
+  }
+  .support-create form > .primary,
+  .support-customer-reply button,
+  .support-customer-conversation > button {
+    width: 100%;
+  }
+}

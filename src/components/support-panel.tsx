@@ -2,71 +2,441 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PrivateMediaUpload } from "@/components/private-media-upload";
+import { useApiAction } from "@/components/use-api-action";
+import { useLanguage } from "@/components/language-provider";
+import { ApiFailure, presentApiError, readApiData } from "@/lib/api-errors";
+import {
+  loadSupportConversation,
+  loadSupportTickets,
+  type SupportConversation,
+  type SupportTicket,
+} from "@/lib/support-actions";
 
-type Ticket = { public_id: string; category: string; priority: string; status: string; subject: string };
-type Message = { id: string; body: string; created_at: string; edited_at: string | null; author_name: string; editable: boolean; revision_count: number };
-type Conversation = { public_id: string; status: string; subject: string; messages: Message[] };
+async function supportRequest<T>(path: string, init: RequestInit): Promise<T> {
+  return readApiData<T>(await fetch(path, init));
+}
 
-async function jsonRequest(path: string, init?: RequestInit) {
-  const response = await fetch(path, init);
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error?.code ?? "SUPPORT_REQUEST_FAILED");
-  return body.data;
+function claimName(value: unknown, fallback: string) {
+  if (value && typeof value === "object" && "en" in value) {
+    return String((value as { en: unknown }).en);
+  }
+  return fallback;
 }
 
 export function SupportPanel() {
-  const [message, setMessage] = useState("");
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const { text } = useLanguage();
+  const { pending, perform, message, live } = useApiAction();
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [conversation, setConversation] = useState<SupportConversation | null>(
+    null,
+  );
   const [mediaIds, setMediaIds] = useState<string[]>([]);
 
   const refresh = useCallback(async () => {
-    try { setTickets((await jsonRequest("/api/v1/support/tickets")).tickets); } catch { setTickets([]); }
+    setTickets(await loadSupportTickets());
   }, []);
+
   useEffect(() => {
-    let cancelled = false;
-    void jsonRequest("/api/v1/support/tickets").then((data) => { if (!cancelled) setTickets(data.tickets); }).catch(() => { if (!cancelled) setTickets([]); });
-    return () => { cancelled = true; };
+    let active = true;
+    void loadSupportTickets()
+      .then((items) => {
+        if (active) setTickets(items);
+      })
+      .catch((error) => {
+        if (active) presentApiError(error);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
-  async function open(publicId: string) {
-    try { setConversation(await jsonRequest(`/api/v1/support/tickets/${encodeURIComponent(publicId)}`)); } catch (error) { setMessage(error instanceof Error ? error.message : "Ticket unavailable"); }
+  function open(publicId: string) {
+    return perform(async () => {
+      setConversation(await loadSupportConversation(publicId));
+    });
   }
 
-  async function submit(form: FormData) {
-    try {
-      const created = await jsonRequest("/api/v1/support/tickets", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ category: form.get("category"), subject: form.get("subject"), message: form.get("message"), orderId: form.get("orderId") || undefined, mediaIds }) });
-      setMediaIds([]); setMessage("Ticket created / تم إنشاء الطلب"); await refresh(); await open(created.public_id);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Ticket could not be created"); }
+  function submit(form: HTMLFormElement) {
+    const values = new FormData(form);
+    void perform(
+      async () => {
+        const created = await supportRequest<{ public_id: string }>(
+          "/api/v1/support/tickets",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              category: values.get("category"),
+              subject: values.get("subject"),
+              message: values.get("message"),
+              orderId: values.get("orderId") || undefined,
+              mediaIds,
+            }),
+          },
+        );
+        if (!created.public_id) throw new ApiFailure("INVALID_RESPONSE");
+        await refresh();
+        setConversation(await loadSupportConversation(created.public_id));
+        setMediaIds([]);
+        form.reset();
+      },
+      { en: "Support ticket created.", ar: "تم إنشاء تذكرة الدعم." },
+    );
   }
 
-  async function reply(form: FormData) {
+  function reply(form: HTMLFormElement) {
     if (!conversation) return;
-    try { await jsonRequest(`/api/v1/support/tickets/${conversation.public_id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: form.get("message") }) }); await open(conversation.public_id); await refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Reply failed"); }
+    const id = conversation.public_id;
+    const values = new FormData(form);
+    void perform(
+      async () => {
+        await supportRequest(
+          `/api/v1/support/tickets/${encodeURIComponent(id)}`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ message: values.get("message") }),
+          },
+        );
+        setConversation(await loadSupportConversation(id));
+        await refresh();
+        form.reset();
+      },
+      { en: "Reply sent.", ar: "تم إرسال الرد." },
+    );
   }
 
-  async function change(action: "CLOSE" | "REOPEN") {
+  function change(action: "CLOSE" | "REOPEN") {
     if (!conversation) return;
-    try { await jsonRequest(`/api/v1/support/tickets/${conversation.public_id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) }); await open(conversation.public_id); await refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Update failed"); }
+    const id = conversation.public_id;
+    void perform(
+      async () => {
+        await supportRequest(
+          `/api/v1/support/tickets/${encodeURIComponent(id)}`,
+          {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action }),
+          },
+        );
+        setConversation(await loadSupportConversation(id));
+        await refresh();
+      },
+      {
+        en: action === "CLOSE" ? "Ticket closed." : "Ticket reopened.",
+        ar: action === "CLOSE" ? "تم إغلاق التذكرة." : "تمت إعادة فتح التذكرة.",
+      },
+    );
   }
 
-  async function edit(messageId: string, form: FormData) {
+  function edit(messageId: string, form: HTMLFormElement) {
     if (!conversation) return;
-    try { await jsonRequest(`/api/v1/support/tickets/${conversation.public_id}/messages/${messageId}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ body: form.get("body") }) }); await open(conversation.public_id); } catch (error) { setMessage(error instanceof Error ? error.message : "Edit failed"); }
+    const id = conversation.public_id;
+    const values = new FormData(form);
+    void perform(
+      async () => {
+        await supportRequest(
+          `/api/v1/support/tickets/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}`,
+          {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ body: values.get("body") }),
+          },
+        );
+        setConversation(await loadSupportConversation(id));
+      },
+      { en: "Message updated.", ar: "تم تحديث الرسالة." },
+    );
   }
 
-  return <div className="list">
-    <form className="panel" action={submit}>
-      <label>Category / التصنيف<select name="category"><option>ORDER</option><option>DAMAGE</option><option>DELIVERY</option><option>PAYMENT</option><option>ACCOUNT</option><option>PRODUCT</option><option>REFERRAL</option><option>VERIFICATION</option><option>PROMOTION</option><option>OTHER</option></select></label>
-      <label>Order reference (optional)<input name="orderId" /></label>
-      <label>Subject / الموضوع<input name="subject" required minLength={3} maxLength={200} /></label>
-      <label>Message / الرسالة<textarea name="message" required rows={6} maxLength={10000} /></label>
-      {mediaIds.length < 5 ? <PrivateMediaUpload onUploaded={(id) => setMediaIds((current) => current.includes(id) ? current : [...current, id])} accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4" /> : null}
-      <small>{mediaIds.length} private attachment(s) ready</small>
-      <button className="primary">Send / إرسال</button>
-    </form>
-    <section className="panel"><h2>Your tickets / طلباتك</h2>{tickets.length === 0 ? <p>No tickets yet.</p> : tickets.map((ticket) => <button key={ticket.public_id} className="secondary" onClick={() => open(ticket.public_id)}>{ticket.public_id} · {ticket.subject} · {ticket.status}</button>)}</section>
-    {conversation ? <section className="panel"><h2>{conversation.subject}</h2><p>{conversation.public_id} · {conversation.status}</p>{conversation.messages.map((item) => <article key={item.id}><strong>{item.author_name}</strong><span>{new Date(item.created_at).toLocaleString("en-JO")}{item.edited_at ? ` · edited (${item.revision_count} prior version)` : ""}</span><p>{item.body}</p>{item.editable ? <details><summary>Edit this message</summary><form action={(form) => edit(item.id, form)}><textarea name="body" defaultValue={item.body} required maxLength={10000} /><button className="secondary">Save edit</button></form></details> : null}</article>)}{conversation.status !== "CLOSED" ? <form action={reply}><textarea name="message" required maxLength={10000} /><button className="primary">Reply / رد</button></form> : null}<button className="secondary" onClick={() => change(conversation.status === "CLOSED" || conversation.status === "RESOLVED" ? "REOPEN" : "CLOSE")}>{conversation.status === "CLOSED" || conversation.status === "RESOLVED" ? "Reopen" : "Close"}</button></section> : null}
-    <p aria-live="polite">{message}</p>
-  </div>;
+  const closed =
+    conversation?.status === "CLOSED" || conversation?.status === "RESOLVED";
+
+  return (
+    <div className="support-center" aria-busy={pending}>
+      <section className="panel support-create">
+        <div>
+          <p className="eyebrow">{text("New request", "طلب جديد")}</p>
+          <h2>{text("How can we help?", "كيف يمكننا مساعدتك؟")}</h2>
+          <p>
+            {text(
+              "For damaged delivered items, open the order and use its evidence-backed damage report.",
+              "للمنتجات التالفة بعد التسليم، افتح الطلب واستخدم بلاغ التلف المرفق بالأدلة.",
+            )}
+          </p>
+        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit(event.currentTarget);
+          }}
+        >
+          <div className="form-grid">
+            <label>
+              {text("Category", "التصنيف")}
+              <select name="category" disabled={pending}>
+                {[
+                  "ORDER",
+                  "DELIVERY",
+                  "PAYMENT",
+                  "ACCOUNT",
+                  "PRODUCT",
+                  "REFERRAL",
+                  "VERIFICATION",
+                  "PROMOTION",
+                  "OTHER",
+                ].map((category) => (
+                  <option key={category}>{category}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {text("Order reference (optional)", "مرجع الطلب (اختياري)")}
+              <input name="orderId" disabled={pending} />
+            </label>
+            <label>
+              {text("Subject", "الموضوع")}
+              <input
+                name="subject"
+                required
+                minLength={3}
+                maxLength={200}
+                disabled={pending}
+              />
+            </label>
+            <label className="support-message-field">
+              {text("Message", "الرسالة")}
+              <textarea
+                name="message"
+                required
+                rows={6}
+                maxLength={10000}
+                disabled={pending}
+                dir="auto"
+              />
+            </label>
+          </div>
+          {mediaIds.length < 5 ? (
+            <PrivateMediaUpload
+              onUploaded={(id) =>
+                setMediaIds((current) =>
+                  current.includes(id) ? current : [...current, id],
+                )
+              }
+              accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4"
+            />
+          ) : null}
+          <small>
+            {text(
+              `${mediaIds.length} private attachment(s) ready`,
+              `${mediaIds.length} مرفق خاص جاهز`,
+            )}
+          </small>
+          <button className="primary" disabled={pending}>
+            {text(
+              pending ? "Sending…" : "Send request",
+              pending ? "جارٍ الإرسال…" : "إرسال الطلب",
+            )}
+          </button>
+        </form>
+      </section>
+
+      <section
+        className="support-history"
+        aria-labelledby="support-history-title"
+      >
+        <div className="support-history-heading">
+          <div>
+            <p className="eyebrow">{text("Your history", "سجل طلباتك")}</p>
+            <h2 id="support-history-title">
+              {text("Support tickets", "تذاكر الدعم")}
+            </h2>
+          </div>
+          <button
+            className="secondary"
+            disabled={pending}
+            onClick={() => void perform(refresh)}
+          >
+            {text("Refresh", "تحديث")}
+          </button>
+        </div>
+        <div className="support-customer-layout">
+          <nav
+            className="support-customer-list"
+            aria-label={text("Your tickets", "تذاكرك")}
+          >
+            {!tickets.length ? (
+              <p className="empty">
+                {text("No tickets yet.", "لا توجد تذاكر بعد.")}
+              </p>
+            ) : null}
+            {tickets.map((ticket) => (
+              <button
+                key={ticket.public_id}
+                type="button"
+                className={`secondary support-customer-ticket${conversation?.public_id === ticket.public_id ? " is-selected" : ""}`}
+                aria-current={
+                  conversation?.public_id === ticket.public_id
+                    ? "true"
+                    : undefined
+                }
+                disabled={pending}
+                onClick={() => void open(ticket.public_id)}
+              >
+                <strong dir="auto">{ticket.subject}</strong>
+                <span>
+                  {ticket.category} · {ticket.status}
+                </span>
+                <small className="reference">{ticket.public_id}</small>
+              </button>
+            ))}
+          </nav>
+
+          {conversation ? (
+            <article className="panel support-customer-conversation">
+              <header>
+                <div>
+                  <small className="reference">{conversation.public_id}</small>
+                  <h3 dir="auto">{conversation.subject}</h3>
+                </div>
+                <span className="status-badge">{conversation.status}</span>
+              </header>
+              {conversation.claim ? (
+                <section className="customer-claim-status">
+                  <div className="claim-heading">
+                    <div>
+                      <p className="eyebrow">
+                        {text("Damage report", "بلاغ تلف")}
+                      </p>
+                      <h4>
+                        {claimName(
+                          conversation.claim.name_snapshot,
+                          conversation.claim.sku,
+                        )}{" "}
+                        · ×{conversation.claim.quantity}
+                      </h4>
+                    </div>
+                    <span className="status-badge">
+                      {conversation.claim.status}
+                    </span>
+                  </div>
+                  <p dir="auto">{conversation.claim.description}</p>
+                  {conversation.claim.customer_safe_reason ? (
+                    <div className="claim-customer-outcome">
+                      <strong>{text("Decision", "القرار")}</strong>
+                      <p dir="auto">
+                        {conversation.claim.customer_safe_reason}
+                      </p>
+                      {conversation.claim.replacement_order_public_id ? (
+                        <small>
+                          {text("Replacement order", "طلب الاستبدال")} ·{" "}
+                          {conversation.claim.replacement_order_public_id}
+                        </small>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <small>
+                      {text(
+                        "Our team is reviewing your evidence.",
+                        "يقوم فريقنا بمراجعة الأدلة.",
+                      )}
+                    </small>
+                  )}
+                </section>
+              ) : null}
+              <div className="support-customer-messages">
+                {conversation.messages.map((item) => (
+                  <article key={item.id} className="support-customer-message">
+                    <header>
+                      <strong>{item.author_name}</strong>
+                      <time dateTime={item.created_at}>
+                        {new Date(item.created_at).toLocaleString("en-JO")}
+                      </time>
+                    </header>
+                    <p dir="auto">{item.body}</p>
+                    {item.edited_at ? (
+                      <small>
+                        {text("Edited", "تم التعديل")} · {item.revision_count}
+                      </small>
+                    ) : null}
+                    {item.editable ? (
+                      <details>
+                        <summary>
+                          {text("Edit this message", "تعديل هذه الرسالة")}
+                        </summary>
+                        <form
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            edit(item.id, event.currentTarget);
+                          }}
+                        >
+                          <textarea
+                            name="body"
+                            defaultValue={item.body}
+                            required
+                            maxLength={10000}
+                            disabled={pending}
+                          />
+                          <button className="secondary" disabled={pending}>
+                            {text("Save edit", "حفظ التعديل")}
+                          </button>
+                        </form>
+                      </details>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+              {!closed ? (
+                <form
+                  className="support-customer-reply"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    reply(event.currentTarget);
+                  }}
+                >
+                  <label>
+                    {text("Reply", "رد")}
+                    <textarea
+                      name="message"
+                      required
+                      maxLength={10000}
+                      disabled={pending}
+                      dir="auto"
+                    />
+                  </label>
+                  <button className="primary" disabled={pending}>
+                    {text("Send reply", "إرسال الرد")}
+                  </button>
+                </form>
+              ) : null}
+              <button
+                type="button"
+                className="secondary"
+                disabled={pending}
+                onClick={() => change(closed ? "REOPEN" : "CLOSE")}
+              >
+                {text(
+                  closed ? "Reopen ticket" : "Close ticket",
+                  closed ? "إعادة فتح التذكرة" : "إغلاق التذكرة",
+                )}
+              </button>
+            </article>
+          ) : (
+            <article className="panel support-customer-empty">
+              <h3>{text("Select a ticket", "اختر تذكرة")}</h3>
+              <p>
+                {text(
+                  "Open a conversation to review its latest status and replies.",
+                  "افتح محادثة لمراجعة أحدث حالتها وردودها.",
+                )}
+              </p>
+            </article>
+          )}
+        </div>
+      </section>
+      <p aria-live={live} className="operation-message">
+        {message}
+      </p>
+    </div>
+  );
 }

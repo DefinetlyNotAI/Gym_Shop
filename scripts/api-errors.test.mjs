@@ -76,6 +76,23 @@ test("commerce and fulfillment codes explain the specific action to correct", ()
   }
 });
 
+test("damage claim failures explain eligibility, evidence and safe recovery", () => {
+  for (const [code, pattern] of [
+    ["CLAIM_INVALID", /claim|report|fields/i],
+    ["CLAIM_NOT_ELIGIBLE", /eligible|delivered|order/i],
+    ["CLAIM_WINDOW_EXPIRED", /seven|7|window/i],
+    ["CLAIM_QUANTITY_EXCEEDED", /quantity/i],
+    ["CLAIM_MEDIA_REQUIRED", /photo|evidence/i],
+    ["MEDIA_NOT_READY", /scan|ready/i],
+    ["CLAIM_NOT_DECIDABLE", /decided|refresh|state/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 422));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.equal(notice.title.en.includes(code), false);
+  }
+});
+
 test("non-JSON failures retain HTTP guidance and malformed success is not confirmed", async () => {
   for (const status of [403, 503]) {
     await assert.rejects(
