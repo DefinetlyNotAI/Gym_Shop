@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { useApiAction } from "@/components/use-api-action";
 import { useLanguage } from "@/components/language-provider";
@@ -6,6 +7,8 @@ import { requestApi } from "@/lib/client-api";
 type AuthResponse = { mfaRequired?: boolean; options?: Parameters<typeof startAuthentication>[0]["optionsJSON"]; pendingToken?: string };
 export function StaffLogin() {
   const { text } = useLanguage();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const { pending, perform, message, live } = useApiAction();
   async function submit(form: HTMLFormElement) {
     const values = new FormData(form);
@@ -19,5 +22,5 @@ export function StaffLogin() {
     }, { en: "Signed in.", ar: "تم تسجيل الدخول." });
     if (completed) location.reload();
   }
-  return <section className="panel"><h2>{text("Authorized staff sign in", "دخول الموظفين المصرّح لهم")}</h2><form onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}><label>{text("Email", "البريد الإلكتروني")}<input name="email" type="email" required /></label><label>{text("Password", "كلمة المرور")}<input name="password" type="password" minLength={12} required /></label><button className="primary" disabled={pending}>{text(pending ? "Continuing…" : "Continue", pending ? "جارٍ المتابعة…" : "متابعة")}</button></form><p aria-live={live}>{message}</p></section>;
+  return <section className="panel"><h2>{text("Authorized staff sign in", "دخول الموظفين المصرّح لهم")}</h2><form onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}><label>{text("Email", "البريد الإلكتروني")}<input name="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>{text("Password", "كلمة المرور")}<input name="password" type="password" minLength={12} required value={password} onChange={(event) => setPassword(event.target.value)} /></label><button className="primary" disabled={pending}>{text(pending ? "Continuing…" : "Continue", pending ? "جارٍ المتابعة…" : "متابعة")}</button></form><p aria-live={live}>{message}</p></section>;
 }

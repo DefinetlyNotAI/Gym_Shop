@@ -281,7 +281,11 @@ export const operationsRoutes: readonly OperationsRoute[] = [
       "بوابات الإطلاق والشروط الثابتة وأدلة الجاهزية المعتمدة من المالك.",
     group: "Administration",
     roles: ["CTO"],
-    requests: ["/api/v1/health", "/api/v1/admin/readiness"],
+    requests: [
+      "/api/v1/health",
+      "/api/v1/admin/readiness",
+      "/api/v1/readiness",
+    ],
   },
 ];
 

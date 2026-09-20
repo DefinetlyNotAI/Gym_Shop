@@ -70,6 +70,7 @@ export function ApiToasts({ staff = false }: { staff?: boolean }) {
                 <code dir="ltr">
                   {notice.code}
                   {notice.status ? " · HTTP " + notice.status : ""}
+                  {notice.reference ? " · " + notice.reference : ""}
                 </code>
               </details>
             </div>

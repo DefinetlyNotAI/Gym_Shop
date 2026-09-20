@@ -244,6 +244,12 @@ test("unknown or malicious server messages and fields never become toast text", 
   );
   assert.equal(unsafe.code, "REQUEST_FAILED");
 });
+test("safe API diagnostic references are preserved without accepting arbitrary text", () => {
+  const safe = apiErrorFromPayload({ error: { code: "VALIDATION_ERROR", reference: "err_0123456789abcdef0123456789abcdef" } }, 422);
+  assert.equal(errorNotice(safe).reference, "err_0123456789abcdef0123456789abcdef");
+  const unsafe = apiErrorFromPayload({ error: { code: "VALIDATION_ERROR", reference: "customer@example.test" } }, 422);
+  assert.equal(errorNotice(unsafe).reference, null);
+});
 test("network failures never offer automatic mutation retries", () => {
   const notice = errorNotice(
     new TypeError("Failed to fetch https://secret.test"),

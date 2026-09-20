@@ -2277,6 +2277,21 @@ details > :not(summary) + :not(summary) {
   color: var(--accent);
   font-size: 1.05rem;
 }
+.readiness-signals article.is-external-blocked strong {
+  color: #755627;
+}
+.release-readiness-callout {
+  padding: 1rem 1.25rem;
+  border: 1px solid #dfcba8;
+  border-inline-start: 4px solid #9a743a;
+  border-radius: 0.65rem;
+  background: #fbf5e9;
+  color: #665136;
+  line-height: 1.6;
+}
+.release-readiness-callout strong {
+  color: #493821;
+}
 .readiness-blockers {
   display: grid;
   gap: 0.8rem;

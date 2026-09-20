@@ -105,6 +105,7 @@ test("delivery and launch settings load only their focused supporting data", () 
   assert.deepEqual(operationsRequests("settings", "CTO"), [
     "/api/v1/health",
     "/api/v1/admin/readiness",
+    "/api/v1/readiness",
   ]);
 });
 

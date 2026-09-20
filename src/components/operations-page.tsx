@@ -125,6 +125,16 @@ export async function OperationsPage({
   const readiness = read<{ ready?: boolean; blockers?: string[] }>(
     "/api/v1/admin/readiness",
   );
+  const releaseReadiness = read<{
+    releases?: {
+      v02?: {
+        softwareReady?: boolean;
+        payoutProviderAvailable?: boolean;
+        activationReady?: boolean;
+        blockers?: string[];
+      };
+    };
+  }>("/api/v1/readiness");
 
   return (
     <main className="page operations-page">
@@ -234,7 +244,11 @@ export async function OperationsPage({
         </>
       ) : null}
       {section === "settings" ? (
-        <AdminTools health={health} readiness={readiness} />
+        <AdminTools
+          health={health}
+          readiness={readiness}
+          releaseReadiness={releaseReadiness?.releases?.v02}
+        />
       ) : null}
       {["catalog", "categories", "collections", "size-guides"].includes(
         section,

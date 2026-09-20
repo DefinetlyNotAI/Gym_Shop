@@ -3,6 +3,7 @@ export type ErrorNotice = {
   key: string;
   code: string;
   status: number;
+  reference: string | null;
   title: LocalizedCopy;
   description: LocalizedCopy;
   recovery: "none" | "signin" | "refresh" | "wait";
@@ -584,6 +585,11 @@ function safeCode(value: unknown): string {
     ? value
     : "REQUEST_FAILED";
 }
+function safeReference(value: unknown): string | null {
+  return typeof value === "string" && /^err_[0-9a-f]{32}$/.test(value)
+    ? value
+    : null;
+}
 function fallback(status: number): Copy {
   if (status === 401) return signin;
   if (status === 403) return permission;
@@ -596,7 +602,8 @@ function fallback(status: number): Copy {
 export class ApiFailure extends Error {
   readonly code: string;
   readonly status: number;
-  constructor(code: string, status = 0) {
+  readonly reference: string | null;
+  constructor(code: string, status = 0, reference: string | null = null) {
     const safe = safeCode(code);
     super(
       (Object.hasOwn(notices, safe) ? notices[safe] : fallback(status))
@@ -605,6 +612,7 @@ export class ApiFailure extends Error {
     this.name = "ApiFailure";
     this.code = safe;
     this.status = status;
+    this.reference = safeReference(reference);
   }
 }
 export function apiErrorFromPayload(
@@ -617,7 +625,11 @@ export function apiErrorFromPayload(
       : null;
   const code =
     error && typeof error === "object" && "code" in error ? error.code : null;
-  return new ApiFailure(safeCode(code), status);
+  const reference =
+    error && typeof error === "object" && "reference" in error
+      ? safeReference(error.reference)
+      : null;
+  return new ApiFailure(safeCode(code), status, reference);
 }
 export async function readApiData<T>(response: Response): Promise<T> {
   const payload: unknown = await response.json().catch(() => null);
@@ -650,6 +662,7 @@ export function errorNotice(error: unknown): ErrorNotice {
     key: failure.code + ":" + failure.status,
     code: failure.code,
     status: failure.status,
+    reference: failure.reference,
     ...selected,
   };
 }
