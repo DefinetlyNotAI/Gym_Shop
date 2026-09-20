@@ -42,9 +42,9 @@ setMessage(presentApiError(error));
 ```
 
 - [x] Preserve existing API method/body/encoded-ID request tests; load the actual imported production normalization module rather than a mock.
-- [ ] Migrate remaining customer/staff request consumers by inspected workflow; track unmigrated consumers explicitly, not as completed.
-- [ ] Browser-test validation, stale closed-ticket edits, private-note isolation and English/Arabic/mobile toast presentation. Confirm inputs and pending controls recover.
-- [ ] Run affected client tests, lint, production builds, independent read-only review and staged diff checks. Commit each client's coherent implementation and record evidence in the central audit.
+- [x] Migrate remaining customer/staff request consumers by inspected workflow; track unmigrated consumers explicitly, not as completed.
+- [x] Browser-test validation, stale closed-ticket edits, private-note isolation and English/Arabic/mobile toast presentation. Confirm inputs and pending controls recover.
+- [x] Run affected client tests, lint, production builds, independent read-only review and staged diff checks. Commit each client's coherent implementation and record evidence in the central audit.
 
 ## Broader acceptance still required
 
@@ -54,13 +54,13 @@ The full audit remains open until every UI-accessible request family is migrated
 
 The user's additional request applies to every customer and staff UI workflow, not only the initial consumers. These checks remain open until evidence covers the remaining workflows:
 
-- [ ] Record each UI request family and its failure owner in the endpoint audit; no raw-code display or silently swallowed failure counts as migrated.
-- [ ] Give each known API error a concise English/Arabic title, a useful description explaining the consequence, and safe recovery guidance where applicable. Keep unknown codes, network failures and malformed responses readable without rendering arbitrary server messages.
-- [ ] Keep sanitized code/status diagnostics collapsed; never show private notes, tokens, credentials, stack traces or sensitive payload fields in toast content.
-- [ ] Verify a failed action produces one toast announcement, retains drafts and last confirmed state, restores pending controls, and does not retry a mutation automatically. Keep field-specific validation beside the affected input.
-- [ ] Inspect title/description/icon/dismiss spacing, wrapping, contrast, keyboard dismissal, screen-reader announcements, RTL and mobile stacking. Important errors persist until dismissed and do not steal focus.
-- [ ] Exercise validation, session expiry, permission denial, stale/conflicting state, rate limits and unavailable providers through the appropriate UI. Payment recovery must use authoritative status rather than suggesting a duplicate charge.
-- [ ] Run production-module regression tests and affected client lint/build checks; record the actual browser-tested workflows and remaining gaps before closing this gate.
+- [x] Record each UI request family and its failure owner in the endpoint audit; no raw-code display or silently swallowed failure counts as migrated.
+- [x] Give each known API error a concise English/Arabic title, a useful description explaining the consequence, and safe recovery guidance where applicable. Keep unknown codes, network failures and malformed responses readable without rendering arbitrary server messages.
+- [x] Keep sanitized code/status/reference diagnostics collapsed; never show private notes, tokens, credentials, stack traces or sensitive payload fields in toast content.
+- [x] Verify a failed action produces one toast announcement, retains drafts and last confirmed state, restores pending controls, and does not retry a mutation automatically. Keep field-specific validation beside the affected input.
+- [x] Inspect title/description/icon/dismiss spacing, wrapping, contrast, keyboard dismissal, screen-reader announcements, RTL and mobile stacking. Important errors persist until dismissed and do not steal focus.
+- [x] Exercise validation, session expiry, permission denial, stale/conflicting state, rate limits and unavailable providers through the appropriate UI. Payment recovery must use authoritative status rather than suggesting a duplicate charge.
+- [x] Run production-module regression tests and affected client lint/build checks; record the actual browser-tested workflows and remaining gaps before closing this gate.
 
 ## Commerce and fulfillment migration progress — 2026-09-13
 

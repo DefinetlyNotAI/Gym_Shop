@@ -20,8 +20,8 @@
 
 ## Acceptance
 
-Each operations URL renders only its selected domain and uses a readable global shell. No horizontally overflowing page, invisible button label, unstyled field/action, tiny interactive link, raw analytics JSON presentation, duplicated header, or all-in-one section stack is acceptable. Form creation/editing is explicit and does not hide monitoring data. External business CliQ activation remains honestly unavailable without real provider integration evidence.
+Each operations URL renders only its selected domain and uses a readable global shell. No horizontally overflowing page, invisible button label, unstyled field/action, tiny interactive link, raw analytics JSON presentation, duplicated header, or all-in-one section stack is acceptable. Form creation/editing is explicit and does not hide monitoring data. APS beneficiary-disbursement activation remains honestly unavailable without real provider integration evidence.
 
 ## Verified outcome
 
-Implemented and browser-checked 19 admin destinations and 22 customer routes at both breakpoints (82 checks). All three static/build matrices and API acceptance/migrations passed; 6 route/reporting regressions passed. Independent review findings on inclusive reporting dates and a campaign textarea label were fixed. Release evidence remains explicit that real business CliQ absence blocks payout integration and the v0.2 release gate; these task checks represent delivered software/UI work, not provider activation.
+Implemented and browser-checked 19 admin destinations and 22 customer routes at both breakpoints (82 checks). All three static/build matrices and API acceptance/migrations passed; 6 route/reporting regressions passed. Independent review findings on inclusive reporting dates and a campaign textarea label were fixed. Release evidence remains explicit that verified APS beneficiary-disbursement support is absent and blocks payout integration and the v0.2 release gate; these task checks represent delivered software/UI work, not provider activation.
