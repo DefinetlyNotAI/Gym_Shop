@@ -277,6 +277,422 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Driver operations and high-security recovery */
+.driver-dashboard,
+.recovery-workspace {
+  --workflow-border: #c8d4c7;
+  --workflow-surface: #fbfcf8;
+  --workflow-tint: #eef3ec;
+}
+.driver-page-heading {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 58rem;
+}
+.driver-page-heading > p:last-child {
+  max-width: 65ch;
+  font-size: clamp(1rem, 2vw, 1.12rem);
+  line-height: 1.75;
+}
+.driver-cash-panel {
+  display: grid;
+  gap: 1.35rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid #bdcdbb;
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(237, 244, 234, 0.94)),
+    var(--surface);
+  box-shadow: 0 14px 36px rgba(38, 50, 45, 0.07);
+}
+.driver-cash-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(18rem, 1.2fr);
+  gap: 1.5rem;
+  align-items: end;
+}
+.driver-cash-heading > div {
+  display: grid;
+  gap: 0.35rem;
+}
+.driver-cash-heading > p {
+  line-height: 1.7;
+}
+.driver-cash-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.driver-cash-metrics article {
+  display: grid;
+  gap: 0.15rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(73, 107, 86, 0.22);
+  border-radius: 0.75rem;
+  background: rgba(255, 253, 249, 0.78);
+}
+.driver-cash-metrics span,
+.driver-assignment-details dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+.driver-cash-metrics strong {
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.driver-cash-form {
+  display: grid;
+  grid-template-columns: minmax(13rem, 1fr) auto;
+  gap: 0.8rem;
+  align-items: end;
+}
+.driver-cash-form button {
+  min-height: 48px;
+}
+.driver-cash-empty {
+  padding: 0.75rem 0.9rem;
+  border-inline-start: 3px solid #8ca08d;
+  background: rgba(255, 255, 255, 0.55);
+}
+.driver-assignment-section {
+  display: grid;
+  gap: 1rem;
+}
+.driver-section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+}
+.driver-section-heading > div {
+  display: grid;
+  gap: 0.3rem;
+}
+.driver-count {
+  display: grid;
+  place-items: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--accent);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.driver-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: clamp(2rem, 6vw, 4rem);
+  border: 1px dashed #b8c6b6;
+  border-radius: 0.9rem;
+  background: rgba(255, 253, 249, 0.65);
+  text-align: center;
+}
+.driver-assignment-list {
+  display: grid;
+  gap: 1rem;
+}
+.driver-assignment-card {
+  display: grid;
+  gap: 1.15rem;
+  padding: clamp(1.1rem, 2.5vw, 1.5rem);
+  border: 1px solid var(--workflow-border);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(38, 50, 45, 0.045);
+}
+.driver-assignment-card > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.driver-assignment-card > header > div {
+  display: grid;
+  gap: 0.15rem;
+}
+.driver-order-reference {
+  color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.78rem;
+}
+.driver-state {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #c8d4c7;
+  border-radius: 999px;
+  background: var(--workflow-tint);
+  color: #355241;
+  font-size: 0.74rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.driver-assignment-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 0;
+}
+.driver-assignment-details > div {
+  display: grid;
+  align-content: start;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border-radius: 0.55rem;
+  background: var(--workflow-tint);
+}
+.driver-assignment-details dd {
+  margin: 0;
+  font-weight: 600;
+}
+.driver-assignment-details .driver-address {
+  grid-column: 1 / -1;
+}
+.driver-attempt-panel {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--workflow-surface);
+  overflow: hidden;
+}
+.driver-attempt-panel > summary {
+  min-height: 48px;
+  padding: 0.8rem 1rem;
+  align-content: center;
+  color: var(--accent);
+  font-weight: 750;
+  cursor: pointer;
+}
+.driver-attempt-panel[open] > summary {
+  border-block-end: 1px solid var(--border);
+  background: var(--workflow-tint);
+}
+.driver-attempt-content {
+  display: grid;
+  gap: 0;
+}
+.driver-action-block {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.8fr) minmax(16rem, 1.2fr);
+  gap: 1.25rem;
+  align-items: start;
+  padding: 1rem;
+  border-block-end: 1px solid var(--border);
+}
+.driver-action-block > div:first-child {
+  display: grid;
+  gap: 0.3rem;
+}
+.driver-action-block > div:first-child small {
+  line-height: 1.55;
+}
+.driver-action-block > button {
+  justify-self: end;
+}
+.driver-action-block form {
+  gap: 0.75rem;
+}
+.driver-action-block textarea {
+  min-height: 5.5rem;
+}
+.driver-failure-action {
+  background: #fffaf7;
+}
+.driver-attempt-content > .operation-result {
+  padding: 0.8rem 1rem;
+}
+
+.recovery-workspace {
+  display: grid;
+  gap: 1.25rem;
+}
+.recovery-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(18rem, 1.2fr);
+  gap: 1.5rem;
+  align-items: end;
+}
+.recovery-overview > div {
+  display: grid;
+  gap: 0.35rem;
+}
+.recovery-overview > p {
+  line-height: 1.75;
+}
+.recovery-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.recovery-progress li {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 48px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.recovery-progress li > span {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--raised);
+  font-variant-numeric: tabular-nums;
+}
+.recovery-progress li.is-current {
+  border-color: var(--accent);
+  background: var(--workflow-tint);
+  color: var(--text);
+}
+.recovery-progress li.is-current > span,
+.recovery-progress li.is-complete > span {
+  background: var(--accent);
+  color: white;
+}
+.recovery-progress li.is-complete {
+  color: #496b56;
+}
+.recovery-factor-card {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.9fr) minmax(18rem, 1.1fr);
+  gap: 1.5rem;
+  align-items: start;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid #c2cec0;
+  border-radius: 0.9rem;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(239, 244, 236, 0.85)),
+    var(--surface);
+  box-shadow: 0 14px 34px rgba(38, 50, 45, 0.06);
+}
+.recovery-factor-card > div:first-child {
+  display: grid;
+  gap: 0.45rem;
+}
+.recovery-factor-card > div:first-child p {
+  line-height: 1.65;
+}
+.recovery-step-number {
+  color: #7a8f7d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.recovery-factor-card form {
+  padding: 1rem;
+  border: 1px solid rgba(73, 107, 86, 0.18);
+  border-radius: 0.7rem;
+  background: rgba(255, 253, 249, 0.82);
+}
+.recovery-factor-card > button {
+  grid-column: 2;
+}
+.recovery-resend-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-block-start: 0.8rem;
+  border-block-start: 1px solid var(--border);
+}
+.recovery-resend-row .ghost {
+  color: var(--accent);
+}
+.recovery-key-step {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+.recovery-key-step p {
+  grid-column: 2;
+}
+.recovery-development-code {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #d4c9aa;
+  border-radius: 0.65rem;
+  background: #faf6e9;
+  color: #5e512e;
+}
+.recovery-development-code strong {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 1.2rem;
+  letter-spacing: 0.16em;
+}
+.recovery-public-status {
+  padding: 0.9rem 1rem;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--workflow-tint);
+}
+
+@media (max-width: 760px) {
+  .driver-cash-heading,
+  .recovery-overview,
+  .recovery-factor-card,
+  .driver-action-block {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .driver-cash-metrics,
+  .driver-cash-form,
+  .driver-assignment-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .driver-cash-form button,
+  .driver-action-block > button {
+    width: 100%;
+    justify-self: stretch;
+  }
+  .driver-assignment-details .driver-address,
+  .recovery-factor-card > button,
+  .recovery-key-step p {
+    grid-column: auto;
+  }
+  .recovery-progress {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .recovery-resend-row {
+    grid-column: auto;
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .recovery-resend-row .ghost {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .driver-assignment-card > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .driver-state {
+    align-self: start;
+  }
+  .recovery-progress {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .support-ticket.secondary {
     transition: none;

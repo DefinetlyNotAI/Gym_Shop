@@ -105,6 +105,26 @@ test("return, discrepancy and template errors show actionable guidance", () => {
   }
 });
 
+test("driver cash and recovery errors show actionable localized guidance", () => {
+  for (const [code, pattern] of [
+    ["AMOUNT_INVALID", /amount|fils/i],
+    ["HANDOVER_EXCEEDS_HELD", /held|custody|cash/i],
+    ["ASSIGNMENT_NOT_FOUND", /assignment|refresh/i],
+    ["PIN_REQUIRED", /pin|six-digit/i],
+    ["DRIVER_CASH_LIMIT", /cash|finance|handover/i],
+    ["RECOVERY_SEND_COOLDOWN", /minute|wait|replacement/i],
+    ["RECOVERY_SEND_LIMIT", /limit|restart|security/i],
+    ["RECOVERY_EXPIRED", /expired|restart/i],
+    ["RECOVERY_STEP_OUT_OF_ORDER", /step|restart/i],
+    ["RECOVERY_FACTOR_UNAVAILABLE", /factor|contact/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 409));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar.length > 4);
+    assert.ok(notice.description.ar.length > 8);
+  }
+});
+
 test("non-JSON failures retain HTTP guidance and malformed success is not confirmed", async () => {
   for (const status of [403, 503]) {
     await assert.rejects(
