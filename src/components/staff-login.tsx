@@ -1,1 +1,23 @@
-"use client";import{useState}from"react";import{startAuthentication}from"@simplewebauthn/browser";import{useLanguage}from"@/components/language-provider";type AuthResponse={mfaRequired?:boolean;options?:Parameters<typeof startAuthentication>[0]["optionsJSON"];pendingToken?:string};export function StaffLogin(){const{text}=useLanguage();const[message,setMessage]=useState("");async function submit(form:FormData){const response=await fetch("/api/v1/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email:form.get("email"),password:form.get("password")})});const payload=await response.json();const data=payload.data as AuthResponse|undefined;if(response.ok&&data?.mfaRequired&&data.options&&data.pendingToken){setMessage(text("Touch your security key","المس مفتاح الأمان"));const assertion=await startAuthentication({optionsJSON:data.options});const mfa=await fetch("/api/v1/auth/mfa",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pendingToken:data.pendingToken,response:assertion})});if(mfa.ok)location.reload();else setMessage(text("MFA failed","فشل التحقق متعدد العوامل"));return;}if(response.ok)location.reload();else setMessage(response.ok?"":text("Sign in failed","فشل تسجيل الدخول"));}return <section className="panel"><h2>{text("Authorized staff sign in","دخول الموظفين المصرّح لهم")}</h2><form action={submit}><label>{text("Email","البريد الإلكتروني")}<input name="email" type="email" required/></label><label>{text("Password","كلمة المرور")}<input name="password" type="password" minLength={12} required/></label><button className="primary">{text("Continue","متابعة")}</button></form><p aria-live="polite">{message}</p></section>}
+"use client";
+import { startAuthentication } from "@simplewebauthn/browser";
+import { useApiAction } from "@/components/use-api-action";
+import { useLanguage } from "@/components/language-provider";
+import { requestApi } from "@/lib/client-api";
+type AuthResponse = { mfaRequired?: boolean; options?: Parameters<typeof startAuthentication>[0]["optionsJSON"]; pendingToken?: string };
+export function StaffLogin() {
+  const { text } = useLanguage();
+  const { pending, perform, message, live } = useApiAction();
+  async function submit(form: HTMLFormElement) {
+    const values = new FormData(form);
+    const completed = await perform(async () => {
+      const data = await requestApi<AuthResponse>("/api/v1/auth/login", { method: "POST", body: { email: values.get("email"), password: values.get("password") } });
+      if (data.mfaRequired) {
+        if (!data.options || !data.pendingToken) throw new Error("INVALID_RESPONSE");
+        const assertion = await startAuthentication({ optionsJSON: data.options });
+        await requestApi("/api/v1/auth/mfa", { method: "POST", body: { pendingToken: data.pendingToken, response: assertion } });
+      }
+    }, { en: "Signed in.", ar: "تم تسجيل الدخول." });
+    if (completed) location.reload();
+  }
+  return <section className="panel"><h2>{text("Authorized staff sign in", "دخول الموظفين المصرّح لهم")}</h2><form onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}><label>{text("Email", "البريد الإلكتروني")}<input name="email" type="email" required /></label><label>{text("Password", "كلمة المرور")}<input name="password" type="password" minLength={12} required /></label><button className="primary" disabled={pending}>{text(pending ? "Continuing…" : "Continue", pending ? "جارٍ المتابعة…" : "متابعة")}</button></form><p aria-live={live}>{message}</p></section>;
+}

@@ -1,5 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useApiAction } from "@/components/use-api-action";
+import { requestApi } from "@/lib/client-api";
 export type NotificationCampaign = {
   public_id: string;
   name: string;
@@ -10,30 +12,16 @@ export type NotificationCampaign = {
   recipients: number;
   suppressed: number;
 };
-async function mutate(path: string, body: unknown) {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error?.code ?? "REQUEST_FAILED");
-  location.reload();
-}
 export function CampaignOperations({
   campaigns,
 }: {
   campaigns: NotificationCampaign[];
 }) {
-  const [message, setMessage] = useState("");
-  async function run(work: () => Promise<void>) {
-    try {
-      await work();
-    } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Campaign action failed",
-      );
-    }
+  const router = useRouter();
+  const { pending, perform, message, live } = useApiAction();
+  async function run(work: () => Promise<unknown>, success: { en: string; ar: string }) {
+    const completed = await perform(() => work().then(() => undefined), success);
+    if (completed) router.refresh();
   }
   return (
     <section id="campaigns">
@@ -46,15 +34,7 @@ export function CampaignOperations({
         <summary>Create a newsletter draft</summary>
         <form
           className="form-grid"
-          action={(form) =>
-            run(() =>
-              mutate("/api/v1/admin/notifications/campaigns", {
-                name: form.get("name"),
-                subject: form.get("subject"),
-                body: form.get("body"),
-              }),
-            )
-          }
+          onSubmit={(event) => { event.preventDefault(); const form = event.currentTarget; const values = new FormData(form); void run(() => requestApi("/api/v1/admin/notifications/campaigns", { method: "POST", body: { name: values.get("name"), subject: values.get("subject"), body: values.get("body") } }), { en: "Newsletter draft created.", ar: "تم إنشاء مسودة النشرة." }); }}
         >
           <label>
             Campaign name
@@ -73,10 +53,10 @@ export function CampaignOperations({
               placeholder="Campaign message"
             />
           </label>
-          <button>Create draft</button>
+          <button disabled={pending}>Create draft</button>
         </form>
       </details>
-      <p aria-live="polite">{message}</p>
+      <p aria-live={live}>{message}</p>
       <div className="list">
         {campaigns.map((item) => (
           <article key={item.public_id}>
@@ -90,55 +70,51 @@ export function CampaignOperations({
             <div className="inline-actions">
               <button
                 className="secondary"
-                onClick={() =>
-                  run(() =>
-                    mutate(
+                disabled={pending}
+                onClick={() => void run(() =>
+                    requestApi(
                       `/api/v1/admin/notifications/campaigns/${item.public_id}`,
-                      { action: "PREVIEW" },
+                      { method: "POST", body: { action: "PREVIEW" } },
                     ),
-                  )
-                }
+                  { en: "Campaign preview prepared.", ar: "تم إعداد معاينة الحملة." })}
               >
                 Preview
               </button>
               <button
-                onClick={() =>
-                  run(() =>
-                    mutate(
+                disabled={pending}
+                onClick={() => void run(() =>
+                    requestApi(
                       `/api/v1/admin/notifications/campaigns/${item.public_id}`,
                       {
-                        action: "SCHEDULE",
-                        scheduledAt: new Date().toISOString(),
+                        method: "POST",
+                        body: { action: "SCHEDULE", scheduledAt: new Date().toISOString() },
                       },
                     ),
-                  )
-                }
+                  { en: "Campaign scheduled.", ar: "تمت جدولة الحملة." })}
               >
                 Schedule now
               </button>
               <button
                 className="secondary"
-                onClick={() =>
-                  run(() =>
-                    mutate(
+                disabled={pending}
+                onClick={() => void run(() =>
+                    requestApi(
                       `/api/v1/admin/notifications/campaigns/${item.public_id}`,
-                      { action: "PAUSE" },
+                      { method: "POST", body: { action: "PAUSE" } },
                     ),
-                  )
-                }
+                  { en: "Campaign paused.", ar: "تم إيقاف الحملة مؤقتاً." })}
               >
                 Pause
               </button>
               <button
                 className="secondary"
-                onClick={() =>
-                  run(() =>
-                    mutate(
+                disabled={pending}
+                onClick={() => void run(() =>
+                    requestApi(
                       `/api/v1/admin/notifications/campaigns/${item.public_id}`,
-                      { action: "CANCEL" },
+                      { method: "POST", body: { action: "CANCEL" } },
                     ),
-                  )
-                }
+                  { en: "Campaign cancelled.", ar: "تم إلغاء الحملة." })}
               >
                 Cancel
               </button>

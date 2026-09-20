@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLanguage } from "@/components/language-provider";
+import { ApiFailure, errorNotice, presentApiError, readApiData } from "@/lib/api-errors";
 
 function hex(bytes: ArrayBuffer) {
   return Array.from(new Uint8Array(bytes), (byte) =>
@@ -23,7 +24,7 @@ export function PrivateMediaUpload({
   accept?: string;
   label?: string;
 }) {
-  const { text } = useLanguage();
+  const { text, language } = useLanguage();
   const caption = label ?? text("Upload private evidence", "رفع مرفق خاص");
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -55,10 +56,9 @@ export function PrivateMediaUpload({
           sha256: hex(digest),
         }),
       });
-      const created = await create.json();
-      if (!create.ok)
-        throw new Error(created.error?.code ?? "UPLOAD_CREATE_FAILED");
-      const put = await fetch(created.data.uploadUrl, {
+      const created = await readApiData<{ id: string; uploadUrl: string }>(create);
+      if (!created.id || !created.uploadUrl) throw new ApiFailure("INVALID_RESPONSE");
+      const put = await fetch(created.uploadUrl, {
         method: "PUT",
         headers: {
           "content-type": file.type,
@@ -66,23 +66,19 @@ export function PrivateMediaUpload({
         },
         body: file,
       });
-      if (!put.ok) throw new Error("UPLOAD_TRANSFER_FAILED");
+      if (!put.ok) throw new ApiFailure("UPLOAD_TRANSFER_FAILED", put.status);
       const finalize = await fetch("/api/v1/media", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ finalize: true, id: created.data.id }),
+        body: JSON.stringify({ finalize: true, id: created.id }),
       });
-      const finalized = await finalize.json();
-      if (!finalize.ok)
-        throw new Error(finalized.error?.code ?? "UPLOAD_FINALIZE_FAILED");
-      onUploaded(created.data.id, finalized.data.ready === true);
-      setMessage(finalized.data.ready ? "READY" : "SCANNING");
+      const finalized = await readApiData<{ ready: boolean }>(finalize);
+      if (typeof finalized.ready !== "boolean") throw new ApiFailure("INVALID_RESPONSE");
+      onUploaded(created.id, finalized.ready);
+      setMessage(finalized.ready ? "READY" : "SCANNING");
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : text("Upload failed", "تعذر رفع الملف"),
-      );
+      presentApiError(error);
+      setMessage(errorNotice(error).description[language]);
     } finally {
       setPending(false);
     }

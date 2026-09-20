@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useApiAction } from "@/components/use-api-action";
+import { requestApi } from "@/lib/client-api";
 import {
   PromotionOperations,
   type Campaign,
@@ -62,33 +64,25 @@ type Props = {
 };
 
 async function mutate(path: string, method: string, body: unknown) {
-  const response = await fetch(path, {
-    method,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error?.code ?? "REQUEST_FAILED");
-  return payload.data;
+  return requestApi(path, { method, body });
 }
 function money(value: unknown) {
   return `${(Number(value) / 1000).toFixed(3)} JOD`;
 }
 
 export function OperationsConsole(props: Props) {
-  const [message, setMessage] = useState("");
+  const router = useRouter();
+  const { pending, perform, message, live } = useApiAction();
   async function run(action: () => Promise<unknown>) {
-    try {
-      const result = await action();
-      setMessage(`Saved: ${JSON.stringify(result)}`);
-      location.reload();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Request failed");
-    }
+    const completed = await perform(() => action().then(() => undefined), {
+      en: "Operation saved and the current workspace refreshed.",
+      ar: "تم حفظ العملية وتحديث مساحة العمل الحالية.",
+    });
+    if (completed) router.refresh();
   }
   return (
     <div className="operations-console">
-      <p className="operation-message" aria-live="polite">
+      <p className="operation-message" aria-live={live}>
         {message}
       </p>
       {props.section === "analytics" ? (
@@ -135,17 +129,15 @@ export function OperationsConsole(props: Props) {
                 </div>
                 {props.canAdjustInventory ? (
                   <form
-                    action={(form) =>
-                      run(() =>
+                    onSubmit={(event) => { event.preventDefault(); const values = new FormData(event.currentTarget); void run(() =>
                         mutate("/api/v1/admin/inventory", "POST", {
                           variantId: item.variant_id,
-                          onHandDelta: Number(form.get("delta")),
-                          reason: form.get("reason"),
-                          sourceReference: form.get("reference"),
-                          comment: form.get("comment") || undefined,
+                          onHandDelta: Number(values.get("delta")),
+                          reason: values.get("reason"),
+                          sourceReference: values.get("reference"),
+                          comment: values.get("comment") || undefined,
                         }),
-                      )
-                    }
+                      ); }}
                   >
                     <label>
                       Stock delta
@@ -180,7 +172,7 @@ export function OperationsConsole(props: Props) {
                       Explanation
                       <input name="comment" placeholder="Explanation" />
                     </label>
-                    <button className="secondary">Record movement</button>
+                    <button className="secondary" disabled={pending}>Record movement</button>
                   </form>
                 ) : null}
               </article>
@@ -236,15 +228,13 @@ export function OperationsConsole(props: Props) {
                     String(refund.status),
                   ) ? (
                     <form
-                      action={(form) =>
-                        run(() =>
+                      onSubmit={(event) => { event.preventDefault(); const values = new FormData(event.currentTarget); void run(() =>
                           mutate(
                             `/api/v1/admin/finance/refunds/${refund.id}/execute`,
                             "POST",
-                            { reference: form.get("reference") || undefined },
+                            { reference: values.get("reference") || undefined },
                           ),
-                        )
-                      }
+                        ); }}
                     >
                       <label>
                         Manual receipt for non-provider refund
@@ -253,7 +243,7 @@ export function OperationsConsole(props: Props) {
                           placeholder="Manual receipt for non-provider refund"
                         />
                       </label>
-                      <button className="secondary">Execute refund</button>
+                      <button className="secondary" disabled={pending}>Execute refund</button>
                     </form>
                   ) : null}
                 </article>
@@ -296,14 +286,12 @@ export function OperationsConsole(props: Props) {
                   ) : null}
                   {entry.kind === "FINANCE_VERIFICATION" ? (
                     <form
-                      action={(form) =>
-                        run(() =>
+                      onSubmit={(event) => { event.preventDefault(); const values = new FormData(event.currentTarget); void run(() =>
                           mutate("/api/v1/admin/finance/deposits", "POST", {
                             verificationId: entry.id,
-                            bankReference: form.get("bankReference"),
+                            bankReference: values.get("bankReference"),
                           }),
-                        )
-                      }
+                        ); }}
                     >
                       <label>
                         Bank statement reference
@@ -313,7 +301,7 @@ export function OperationsConsole(props: Props) {
                           placeholder="Bank statement reference"
                         />
                       </label>
-                      <button className="secondary">
+                      <button className="secondary" disabled={pending}>
                         Record independent deposit
                       </button>
                     </form>
@@ -385,15 +373,13 @@ export function OperationsConsole(props: Props) {
           {props.canInviteStaff ? (
             <form
               className="panel form-grid"
-              action={(form) =>
-                run(() =>
+              onSubmit={(event) => { event.preventDefault(); const values = new FormData(event.currentTarget); void run(() =>
                   mutate("/api/v1/admin/staff", "POST", {
-                    email: form.get("email"),
-                    name: form.get("name"),
-                    role: form.get("role"),
+                    email: values.get("email"),
+                    name: values.get("name"),
+                    role: values.get("role"),
                   }),
-                )
-              }
+                ); }}
             >
               <label>
                 Staff email

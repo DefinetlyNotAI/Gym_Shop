@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useApiAction } from "@/components/use-api-action";
+import { requestApi } from "@/lib/client-api";
 
 type PromotionRule = {
   publicId: string;
@@ -23,15 +25,7 @@ export type Campaign = {
 };
 
 async function mutate(path: string, method: string, body: unknown) {
-  const response = await fetch(path, {
-    method,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json();
-  if (!response.ok)
-    throw new Error(payload.error?.code ?? "PROMOTION_REQUEST_FAILED");
-  return payload.data;
+  return requestApi(path, { method, body });
 }
 
 const lifecycleOptions: Record<string, string[]> = {
@@ -49,18 +43,15 @@ function optionalInstant(value: FormDataEntryValue | null) {
 }
 
 export function PromotionOperations({ campaigns }: { campaigns: Campaign[] }) {
-  const [message, setMessage] = useState("");
+  const router = useRouter();
+  const { pending, perform, message, live } = useApiAction();
 
   async function run(action: () => Promise<unknown>) {
-    try {
-      const result = await action();
-      setMessage(`Saved: ${JSON.stringify(result)}`);
-      location.reload();
-    } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Promotion request failed",
-      );
-    }
+    const completed = await perform(() => action().then(() => undefined), {
+      en: "Promotion operation saved.",
+      ar: "تم حفظ عملية العرض.",
+    });
+    if (completed) router.refresh();
   }
 
   return (
@@ -74,8 +65,7 @@ export function PromotionOperations({ campaigns }: { campaigns: Campaign[] }) {
         <summary>Create a promotion campaign</summary>
         <form
           className="form-grid"
-          action={(form) =>
-            run(() => {
+          onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void run(() => {
               const kind = String(form.get("kind"));
               const code = String(form.get("code") ?? "").trim();
               const scopeId = String(form.get("scopeId") ?? "").trim();
@@ -149,8 +139,7 @@ export function PromotionOperations({ campaigns }: { campaigns: Campaign[] }) {
                   },
                 ],
               });
-            })
-          }
+            }); }}
         >
           <label>
             Internal campaign name
@@ -363,23 +352,21 @@ export function PromotionOperations({ campaigns }: { campaigns: Campaign[] }) {
           <label className="check">
             <input name="enabled" type="checkbox" /> Enable the rule immediately
           </label>
-          <button className="secondary">Create campaign</button>
+          <button className="secondary" disabled={pending}>Create campaign</button>
         </form>
       </details>
       <details className="workflow-disclosure">
         <summary>Preview an authoritative quote</summary>
         <form
           className="form-grid"
-          action={(form) =>
-            run(() =>
+          onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void run(() =>
               mutate("/api/v1/admin/promotions/preview", "POST", {
                 accountId: form.get("accountId"),
                 deliveryZoneId: form.get("deliveryZoneId"),
                 couponCode:
                   String(form.get("previewCoupon") ?? "").trim() || undefined,
               }),
-            )
-          }
+            ); }}
         >
           <strong>Quote preview / معاينة السعر</strong>
           <label>
@@ -407,10 +394,10 @@ export function PromotionOperations({ campaigns }: { campaigns: Campaign[] }) {
               placeholder="Optional coupon code"
             />
           </label>
-          <button className="secondary">Preview without consuming usage</button>
+          <button className="secondary" disabled={pending}>Preview without consuming usage</button>
         </form>
       </details>
-      <p className="operation-message" aria-live="polite">
+      <p className="operation-message" aria-live={live}>
         {message}
       </p>
       <div className="list">
