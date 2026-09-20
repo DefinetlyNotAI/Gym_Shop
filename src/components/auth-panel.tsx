@@ -15,6 +15,9 @@ export function AuthPanel({ terms }: { terms: { id: string; version: string; tit
   const [mode, setMode] = useState<"login" | "register">("login");
   const [verificationMessage, setVerificationMessage] = useState("");
   const [developmentToken, setDevelopmentToken] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const { pending, perform, message, live } = useApiAction();
   const search = useSearchParams();
   useEffect(() => {
@@ -40,7 +43,13 @@ export function AuthPanel({ terms }: { terms: { id: string; version: string; tit
     }, mode === "login" ? { en: "Signed in.", ar: "تم تسجيل الدخول." } : { en: "Account created. Check your verification message.", ar: "تم إنشاء الحساب. تحقق من رسالة التأكيد." });
     if (!completed) return;
     if (mode === "login") location.reload();
-    else { setDevelopmentToken(verificationToken); form.reset(); }
+    else {
+      setDevelopmentToken(verificationToken);
+      setDisplayName("");
+      setEmail("");
+      setPassword("");
+      form.reset();
+    }
   }
-  return <section className="panel"><div className="tabs"><button aria-pressed={mode === "login"} disabled={pending} onClick={() => setMode("login")}>{text("Sign in", "دخول")}</button><button aria-pressed={mode === "register"} disabled={pending} onClick={() => setMode("register")}>{text("Create account", "حساب جديد")}</button></div><form onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>{mode === "register" ? <label>{text("Name", "الاسم")}<input name="name" required minLength={2} /></label> : null}<label>{text("Email", "البريد")}<input name="email" type="email" required /></label><label>{text("Password", "كلمة المرور")}<input name="password" type="password" required minLength={12} /></label>{mode === "register" ? <>{terms ? <><article className="notice"><strong>{terms.title}</strong><span>{text("Version", "الإصدار")} {terms.version}</span></article><label className="check"><input name="accept" type="checkbox" required />{text("I accept this version", "أوافق على هذه النسخة")}</label></> : <p className="alert">{text("Registration is unavailable until reviewed terms are published.", "التسجيل غير متاح حتى نشر الشروط المعتمدة.")}</p>}<label className="check"><input name="marketing" type="checkbox" />{text("Optional marketing", "تسويق اختياري")}</label></> : null}<button className="primary" type="submit" disabled={pending || (mode === "register" && !terms)}>{text(pending ? "Continuing…" : "Continue", pending ? "جارٍ المتابعة…" : "متابعة")}</button></form>{developmentToken ? <output className="secret">{text("Local verification token", "رمز التحقق المحلي")}: {developmentToken}</output> : null}<p aria-live="polite">{verificationMessage}</p><p aria-live={live}>{message}</p></section>;
+  return <section className="panel"><div className="tabs"><button aria-pressed={mode === "login"} disabled={pending} onClick={() => setMode("login")}>{text("Sign in", "دخول")}</button><button aria-pressed={mode === "register"} disabled={pending} onClick={() => setMode("register")}>{text("Create account", "حساب جديد")}</button></div><form onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>{mode === "register" ? <label>{text("Name", "الاسم")}<input name="name" required minLength={2} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label> : null}<label>{text("Email", "البريد")}<input name="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>{text("Password", "كلمة المرور")}<input name="password" type="password" required minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} /></label>{mode === "register" ? <>{terms ? <><article className="notice"><strong>{terms.title}</strong><span>{text("Version", "الإصدار")} {terms.version}</span></article><label className="check"><input name="accept" type="checkbox" required />{text("I accept this version", "أوافق على هذه النسخة")}</label></> : <p className="alert">{text("Registration is unavailable until reviewed terms are published.", "التسجيل غير متاح حتى نشر الشروط المعتمدة.")}</p>}<label className="check"><input name="marketing" type="checkbox" />{text("Optional marketing", "تسويق اختياري")}</label></> : null}<button className="primary" type="submit" disabled={pending || (mode === "register" && !terms)}>{text(pending ? "Continuing…" : "Continue", pending ? "جارٍ المتابعة…" : "متابعة")}</button></form>{developmentToken ? <output className="secret">{text("Local verification token", "رمز التحقق المحلي")}: {developmentToken}</output> : null}<p aria-live="polite">{verificationMessage}</p><p aria-live={live}>{message}</p></section>;
 }

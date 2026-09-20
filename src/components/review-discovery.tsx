@@ -4,6 +4,7 @@ import { presentApiError } from "@/lib/api-errors";
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
 import { customerAction, reviewReportFromForm } from "@/lib/customer-actions";
+import { requestApi } from "@/lib/client-api";
 
 type Review = {
   publicId: string;
@@ -197,19 +198,19 @@ export function ReviewDiscovery({ slug }: { slug: string }) {
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    fetch(
+    requestApi<ReviewListing>(
       `/api/v1/catalog/products/${encodeURIComponent(slug)}/reviews?sort=${sort}`,
       { signal: controller.signal },
     )
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Review loading failed");
-        const payload = await response.json();
-        if (!payload.data || !Array.isArray(payload.data.reviews))
-          throw new Error("Invalid review listing");
-        if (!controller.signal.aborted) setListing(payload.data);
+      .then((data) => {
+        if (!Array.isArray(data.reviews)) throw new Error("INVALID_RESPONSE");
+        if (!controller.signal.aborted) setListing(data);
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setFailed(true);
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setFailed(true);
+          presentApiError(error);
+        }
       });
     return () => controller.abort();
   }, [slug, sort, retry]);
