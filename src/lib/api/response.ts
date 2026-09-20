@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 
 export type ApiError = {
@@ -13,5 +14,12 @@ export function apiSuccess<T>(data: T, init?: ResponseInit) {
 }
 
 export function apiError(status: number, error: ApiError) {
-  return NextResponse.json({ error }, { status, headers: noStoreHeaders });
+  const reference = `err_${randomBytes(16).toString("hex")}`;
+  return NextResponse.json(
+    { error: { ...error, reference } },
+    {
+      status,
+      headers: { ...noStoreHeaders, "X-Error-Reference": reference },
+    },
+  );
 }
