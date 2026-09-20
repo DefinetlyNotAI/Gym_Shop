@@ -145,13 +145,16 @@ export const operationsRoutes: readonly OperationsRoute[] = [
   {
     id: "delivery-settings",
     href: "/delivery-settings",
-    title: "Delivery zones",
-    titleAr: "مناطق التوصيل",
-    description: "Reviewed delivery fees and service policies.",
-    descriptionAr: "رسوم التوصيل وسياسات الخدمة المعتمدة.",
+    title: "Delivery & pickup",
+    titleAr: "التوصيل والاستلام",
+    description: "Reviewed delivery fees, service windows, and pickup locations.",
+    descriptionAr: "رسوم التوصيل ونوافذ الخدمة ومواقع الاستلام المعتمدة.",
     group: "Commerce",
     roles: logistics,
-    requests: ["/api/v1/admin/delivery/zones"],
+    requests: [
+      "/api/v1/admin/delivery/zones",
+      "/api/v1/admin/delivery/pickups",
+    ],
   },
   {
     id: "promotions",
@@ -273,12 +276,12 @@ export const operationsRoutes: readonly OperationsRoute[] = [
     title: "Launch settings",
     titleAr: "إعدادات التشغيل",
     description:
-      "Owner-reviewed setup, terms, fulfillment configuration, and readiness evidence.",
+      "Owner-reviewed launch gates, immutable terms, and readiness evidence.",
     descriptionAr:
-      "الإعداد والشروط وإعدادات التنفيذ وأدلة الجاهزية المعتمدة من المالك.",
+      "بوابات الإطلاق والشروط الثابتة وأدلة الجاهزية المعتمدة من المالك.",
     group: "Administration",
     roles: ["CTO"],
-    requests: [],
+    requests: ["/api/v1/health", "/api/v1/admin/readiness"],
   },
 ];
 

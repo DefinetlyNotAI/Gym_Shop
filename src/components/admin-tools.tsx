@@ -1,30 +1,118 @@
 "use client";
-import { useState } from "react";
 
-async function send(path:string,body:unknown){const response=await fetch(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.error?.code??"REQUEST_FAILED");return data.data;}
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useApiAction } from "@/components/use-api-action";
+import { useLanguage } from "@/components/language-provider";
+import { publishBilingualTerms, recordRecoveryDrill, updateLaunchSetting } from "@/lib/launch-settings-actions";
+import { readinessBlockerCopy } from "@/lib/launch-readiness";
 
-export function AdminTools(){
-  const[message,setMessage]=useState("");
-  async function run(action:()=>Promise<unknown>){try{await action();setMessage("Saved / تم الحفظ");location.reload();}catch(error){setMessage(error instanceof Error?error.message:"Failed");}}
-  return <section className="admin-tools">
-    <h2>Launch configuration / إعداد التشغيل</h2>
-    <div className="quick-grid">
-      <button className="secondary" onClick={()=>run(()=>send("/api/v1/admin/settings",{key:"checkout.tax_policy",value:"NONE_REVIEWED",reason:"Owner reviewed launch tax treatment"}))}>Confirm reviewed tax mode</button>
-      <button className="secondary" onClick={()=>run(()=>send("/api/v1/admin/settings",{key:"delivery.cod_redelivery_policy_reviewed",value:true,reason:"CTO confirmed the reviewed quote-derived COD redelivery policy"}))}>Confirm COD redelivery policy</button>
-      <button className="secondary" onClick={()=>run(()=>send("/api/v1/admin/settings",{key:"platform.store_enabled",value:true,reason:"CTO opened storefront after readiness review"}))}>Enable storefront</button>
+type Health = { status?: string; service?: string; version?: string };
+type Readiness = { ready?: boolean; blockers?: string[] };
+
+function Result({ message, live }: { message: string; live: "off" | "polite" }) {
+  return <p className="operation-result" aria-live={live}>{message}</p>;
+}
+
+function SettingAction({ label, pendingLabel, setting, value, reason }: {
+  label: { en: string; ar: string };
+  pendingLabel: { en: string; ar: string };
+  setting: "checkout.tax_policy" | "delivery.cod_redelivery_policy_reviewed" | "platform.store_enabled";
+  value: "NONE_REVIEWED" | boolean;
+  reason: string;
+}) {
+  const { text } = useLanguage();
+  const router = useRouter();
+  const { pending, perform, message, live } = useApiAction();
+  async function run() {
+    const completed = await perform(
+      () => updateLaunchSetting(setting, value, reason),
+      { en: "Launch setting saved and readiness refreshed.", ar: "تم حفظ إعداد التشغيل وتحديث الجاهزية." },
+    );
+    if (completed) router.refresh();
+  }
+  return (
+    <article className="launch-action">
+      <button className="secondary" disabled={pending} onClick={() => void run()}>
+        {text(pending ? pendingLabel.en : label.en, pending ? pendingLabel.ar : label.ar)}
+      </button>
+      <Result message={message} live={live} />
+    </article>
+  );
+}
+
+function TermsForm() {
+  const { text } = useLanguage();
+  const router = useRouter();
+  const { pending, perform, message, live } = useApiAction();
+  async function submit(form: HTMLFormElement) {
+    const values = new FormData(form);
+    const completed = await perform(
+      () => publishBilingualTerms({
+        version: String(values.get("version") ?? ""),
+        titleEn: String(values.get("titleEn") ?? ""),
+        bodyEn: String(values.get("bodyEn") ?? ""),
+        titleAr: String(values.get("titleAr") ?? ""),
+        bodyAr: String(values.get("bodyAr") ?? ""),
+      }).then(() => undefined),
+      { en: "Immutable bilingual terms published.", ar: "تم نشر الشروط الثابتة باللغتين." },
+    );
+    if (completed) { form.reset(); router.refresh(); }
+  }
+  return (
+    <article className="launch-form-card">
+      <header><span className="eyebrow">{text("LEGAL CONTENT", "المحتوى القانوني")}</span><h2>{text("Publish bilingual terms", "نشر الشروط باللغتين")}</h2><p>{text("Publishing creates one immutable English and Arabic version for checkout consent.", "ينشئ النشر إصداراً ثابتاً بالإنجليزية والعربية لموافقة الدفع.")}</p></header>
+      <form className="configuration-form" onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>
+        <label>{text("Version", "الإصدار")}<input name="version" required maxLength={100} placeholder="2026-09-20" /></label>
+        <label>{text("English title", "العنوان بالإنجليزية")}<input name="titleEn" required minLength={2} /></label>
+        <label className="configuration-wide">{text("Reviewed English terms", "الشروط الإنجليزية المعتمدة")}<textarea name="bodyEn" required minLength={10} rows={5} /></label>
+        <label>{text("Arabic title", "العنوان بالعربية")}<input name="titleAr" required minLength={2} dir="rtl" /></label>
+        <label className="configuration-wide">{text("Reviewed Arabic terms", "الشروط العربية المعتمدة")}<textarea name="bodyAr" required minLength={10} rows={5} dir="rtl" /></label>
+        <div className="configuration-submit configuration-wide"><small>{text("A published version cannot be edited later.", "لا يمكن تعديل الإصدار بعد نشره.")}</small><button disabled={pending}>{text(pending ? "Publishing…" : "Publish version", pending ? "جارٍ النشر…" : "نشر الإصدار")}</button></div>
+      </form>
+      <Result message={message} live={live} />
+    </article>
+  );
+}
+
+function RecoveryDrillForm() {
+  const { text } = useLanguage();
+  const router = useRouter();
+  const { pending, perform, message, live } = useApiAction();
+  async function submit(form: HTMLFormElement) {
+    const values = new FormData(form);
+    const completed = await perform(
+      () => recordRecoveryDrill({ result: String(values.get("result")) as "PASSED" | "FAILED", notes: String(values.get("notes") ?? "") }).then(() => undefined),
+      { en: "Recovery-drill evidence recorded.", ar: "تم تسجيل دليل تمرين الاسترداد." },
+    );
+    if (completed) { form.reset(); router.refresh(); }
+  }
+  return (
+    <article className="launch-form-card launch-evidence-card">
+      <header><span className="eyebrow">{text("RECOVERY EVIDENCE", "دليل الاسترداد")}</span><h2>{text("Record the CTO recovery drill", "تسجيل تمرين استرداد المدير التقني")}</h2><p>{text("Document the real two-key recovery outcome, participants, and follow-up actions.", "وثّق نتيجة الاسترداد الفعلية بمفتاحين والمشاركين وإجراءات المتابعة.")}</p></header>
+      <form className="configuration-form" onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>
+        <label>{text("Result", "النتيجة")}<select name="result" defaultValue="PASSED"><option value="PASSED">{text("Passed", "ناجح")}</option><option value="FAILED">{text("Failed", "فشل")}</option></select></label>
+        <label className="configuration-wide">{text("Evidence notes", "ملاحظات الدليل")}<textarea name="notes" required minLength={10} maxLength={2000} rows={6} placeholder={text("Date, participants, keys used, outcome, and follow-up actions", "التاريخ والمشاركون والمفاتيح المستخدمة والنتيجة وإجراءات المتابعة")} /></label>
+        <div className="configuration-submit configuration-wide"><small>{text("Record only a drill that actually occurred.", "سجّل فقط تمريناً تم تنفيذه فعلياً.")}</small><button disabled={pending}>{text(pending ? "Recording…" : "Record evidence", pending ? "جارٍ التسجيل…" : "تسجيل الدليل")}</button></div>
+      </form>
+      <Result message={message} live={live} />
+    </article>
+  );
+}
+
+export function AdminTools({ health, readiness }: { health?: Health; readiness?: Readiness }) {
+  const { text, language } = useLanguage();
+  const ready = readiness?.ready === true;
+  const blockers = readiness?.blockers ?? [];
+  return (
+    <div className="launch-workspace">
+      <section className={`readiness-hero ${ready ? "is-ready" : "is-blocked"}`}>
+        <div><span className="eyebrow">{text("LAUNCH CONTROL", "ضبط الإطلاق")}</span><h2>{ready ? text("Storefront launch requirements are ready", "متطلبات إطلاق المتجر جاهزة") : text(`${blockers.length} launch requirement${blockers.length === 1 ? "" : "s"} need attention`, `${blockers.length} من متطلبات الإطلاق تحتاج متابعة`)}</h2><p>{text("This status is calculated by the API from live platform state and immutable release evidence.", "تُحتسب هذه الحالة من واجهة البرمجة اعتماداً على حالة المنصة المباشرة وأدلة الإصدار الثابتة.")}</p></div>
+        <div className="readiness-signals"><article><span>{text("API service", "خدمة الواجهة")}</span><strong>{health?.status === "ok" ? text("Operational", "تعمل") : text("Unavailable", "غير متاحة")}</strong><small>{health?.service ?? "gym-shop-api"} · v{health?.version ?? "—"}</small></article><article><span>{text("Launch gate", "بوابة الإطلاق")}</span><strong>{ready ? text("Ready", "جاهزة") : text("Blocked", "متوقفة")}</strong><small>{ready ? text("No active blockers", "لا توجد عوائق نشطة") : text("Complete every item below", "أكمل جميع البنود أدناه")}</small></article></div>
+      </section>
+      {blockers.length ? <section className="readiness-blockers"><header><h2>{text("Requirements to resolve", "المتطلبات المطلوب معالجتها")}</h2><span>{blockers.length}</span></header><div>{blockers.map((code) => { const copy = readinessBlockerCopy(code); return <article key={code}><span aria-hidden="true">!</span><div><strong>{copy.title[language]}</strong><p>{copy.description[language]}</p></div></article>; })}</div></section> : <p className="readiness-clear">{text("All platform launch requirements currently pass. Recheck after any configuration change.", "جميع متطلبات إطلاق المنصة ناجحة حالياً. أعد التحقق بعد أي تغيير في الإعدادات.")}</p>}
+      <section className="launch-settings-card"><header><div><span className="eyebrow">{text("OWNER CONFIRMATIONS", "تأكيدات المالك")}</span><h2>{text("Reviewed launch settings", "إعدادات الإطلاق المعتمدة")}</h2></div><p>{text("Each confirmation creates an audited setting change. Enable the storefront only after every blocker is resolved.", "ينشئ كل تأكيد تغييراً مدققاً في الإعدادات. فعّل المتجر فقط بعد معالجة جميع العوائق.")}</p></header><div className="launch-actions"><SettingAction label={{ en: "Confirm reviewed tax mode", ar: "تأكيد وضع الضريبة المعتمد" }} pendingLabel={{ en: "Saving…", ar: "جارٍ الحفظ…" }} setting="checkout.tax_policy" value="NONE_REVIEWED" reason="Owner reviewed launch tax treatment" /><SettingAction label={{ en: "Confirm COD redelivery policy", ar: "تأكيد سياسة إعادة توصيل الدفع عند الاستلام" }} pendingLabel={{ en: "Saving…", ar: "جارٍ الحفظ…" }} setting="delivery.cod_redelivery_policy_reviewed" value={true} reason="CTO confirmed the reviewed quote-derived COD redelivery policy" /><SettingAction label={{ en: "Enable storefront", ar: "تفعيل المتجر" }} pendingLabel={{ en: "Enabling…", ar: "جارٍ التفعيل…" }} setting="platform.store_enabled" value={true} reason="CTO opened storefront after readiness review" /></div><Link className="delivery-settings-link" href="/delivery-settings">{text("Open delivery & pickup configuration", "فتح إعدادات التوصيل والاستلام")} <span aria-hidden="true">↗</span></Link></section>
+      <div className="launch-form-columns"><TermsForm /><RecoveryDrillForm /></div>
     </div>
-    <details><summary>Create delivery zone</summary><form action={form=>run(()=>send("/api/v1/admin/delivery/zones",{nameEn:form.get("nameEn"),nameAr:form.get("nameAr"),feeFils:Number(form.get("fee")),etaMinDays:Number(form.get("etaMin")),etaMaxDays:Number(form.get("etaMax")),policyReviewed:form.get("reviewed")==="on",windows:[{weekday:Number(form.get("weekday")),startsAt:form.get("starts"),endsAt:form.get("ends"),capacity:Number(form.get("capacity"))}]}))}>
-      <input name="nameEn" placeholder="Zone name" required/><input name="nameAr" placeholder="اسم المنطقة" required/><input name="fee" type="number" min="0" placeholder="Fee in fils" required/><input name="etaMin" type="number" min="0" placeholder="Min days" required/><input name="etaMax" type="number" min="0" placeholder="Max days" required/><input name="weekday" type="number" min="0" max="6" placeholder="Weekday 0-6" required/><input name="starts" type="time" required/><input name="ends" type="time" required/><input name="capacity" type="number" min="1" placeholder="Capacity" required/><label className="check"><input name="reviewed" type="checkbox"/>Fee and policy reviewed</label><button className="primary">Create zone</button>
-    </form></details>
-    <details><summary>Create pickup location</summary><form action={form=>run(()=>send("/api/v1/admin/delivery/pickups",{nameEn:form.get("nameEn"),nameAr:form.get("nameAr"),address:{text:form.get("address")},hours:{text:form.get("hours")}}))}>
-      <input name="nameEn" placeholder="Pickup name" required/><input name="nameAr" placeholder="اسم موقع الاستلام" required/><textarea name="address" placeholder="Address / العنوان" required/><textarea name="hours" placeholder="Hours / الساعات" required/><button className="primary">Create pickup</button>
-    </form></details>
-    <details><summary>Publish bilingual terms</summary><form action={form=>run(()=>send("/api/v1/admin/terms",{kind:"TERMS",version:form.get("version"),titleEn:form.get("titleEn"),bodyEn:form.get("bodyEn"),titleAr:form.get("titleAr"),bodyAr:form.get("bodyAr"),publish:true}))}>
-      <input name="version" required placeholder="Version"/><input name="titleEn" required placeholder="English title"/><textarea name="bodyEn" required placeholder="Reviewed English terms"/><input name="titleAr" required placeholder="العنوان العربي"/><textarea name="bodyAr" required placeholder="الشروط العربية المعتمدة"/><button className="primary">Publish immutable version</button>
-    </form></details>
-    <details><summary>Record v0.1 recovery drill</summary><form action={form=>run(()=>send("/api/v1/admin/readiness",{result:form.get("result"),notes:form.get("notes")}))}>
-      <select name="result" required defaultValue="PASSED"><option value="PASSED">Passed</option><option value="FAILED">Failed</option></select><textarea name="notes" required minLength={10} maxLength={2000} placeholder="Date, participants, two independent keys used, recovery outcome, and follow-up actions"/><button className="primary">Record immutable drill evidence</button>
-    </form></details>
-    <p aria-live="polite">{message}</p>
-  </section>;
+  );
 }

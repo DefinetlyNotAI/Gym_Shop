@@ -97,6 +97,17 @@ test("an inventory page fetches inventory only, never unrelated domains", () => 
   assert.deepEqual(operationsRequests("finance", "ADMIN"), []);
 });
 
+test("delivery and launch settings load only their focused supporting data", () => {
+  assert.deepEqual(operationsRequests("delivery-settings", "ADMIN"), [
+    "/api/v1/admin/delivery/zones",
+    "/api/v1/admin/delivery/pickups",
+  ]);
+  assert.deepEqual(operationsRequests("settings", "CTO"), [
+    "/api/v1/health",
+    "/api/v1/admin/readiness",
+  ]);
+});
+
 test("overview requests only the measures authorized for the current role", () => {
   assert.deepEqual(operationsRequests("overview", "SUPPORT_AGENT"), [
     "/api/v1/admin/support/tickets",

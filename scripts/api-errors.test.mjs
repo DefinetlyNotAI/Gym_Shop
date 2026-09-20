@@ -105,6 +105,36 @@ test("return, discrepancy and template errors show actionable guidance", () => {
   }
 });
 
+test("delivery configuration errors preserve entered fields and explain correction", () => {
+  for (const [code, pattern] of [
+    ["ZONE_CREATE_INVALID", /zone|fee|window/i],
+    ["ZONE_CREATE_FAILED", /zone|configuration/i],
+    ["PICKUP_CREATE_INVALID", /pickup|address|hours/i],
+    ["PICKUP_CREATE_FAILED", /pickup|location/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 422));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.equal(notice.title.en.includes(code), false);
+  }
+});
+
+test("launch configuration errors explain the safe next action", () => {
+  for (const [code, pattern] of [
+    ["SETTING_UPDATE_INVALID", /setting|reason/i],
+    ["SETTING_UPDATE_FAILED", /setting|current/i],
+    ["STOREFRONT_ACTIVATION_BLOCKED", /requirement|readiness/i],
+    ["TERMS_CREATE_INVALID", /terms|language/i],
+    ["TERMS_CREATE_DENIED", /sign|permission|publish/i],
+    ["EVIDENCE_INVALID", /evidence|notes|drill/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 422));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.equal(notice.title.en.includes(code), false);
+  }
+});
+
 test("driver cash and recovery errors show actionable localized guidance", () => {
   for (const [code, pattern] of [
     ["AMOUNT_INVALID", /amount|fils/i],

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminTools } from "@/components/admin-tools";
+import { DeliverySettingsWorkspace } from "@/components/delivery-settings-workspace";
 import {
   CatalogWorkspace,
   type CatalogData,
@@ -37,6 +38,7 @@ type Rows = {
   events?: Row[];
   orders?: Row[];
   zones?: Row[];
+  pickups?: Row[];
   tickets?: Parameters<typeof SupportOperations>[0]["initialTickets"];
   refunds?: Row[];
   cash?: Row[];
@@ -113,9 +115,16 @@ export async function OperationsPage({
   const customers = read<Rows>("/api/v1/admin/customers");
   const staff = read<Rows>("/api/v1/admin/staff");
   const zones = read<Rows>("/api/v1/admin/delivery/zones");
+  const pickups = read<Rows>("/api/v1/admin/delivery/pickups");
   const templates = read<Rows>("/api/v1/admin/notifications/templates");
   const audits = read<Rows>("/api/v1/admin/audits");
   const platform = read<{ simulation: boolean }>("/api/v1/platform");
+  const health = read<{ status?: string; service?: string; version?: string }>(
+    "/api/v1/health",
+  );
+  const readiness = read<{ ready?: boolean; blockers?: string[] }>(
+    "/api/v1/admin/readiness",
+  );
 
   return (
     <main className="page operations-page">
@@ -224,7 +233,9 @@ export async function OperationsPage({
           </section>
         </>
       ) : null}
-      {section === "settings" ? <AdminTools /> : null}
+      {section === "settings" ? (
+        <AdminTools health={health} readiness={readiness} />
+      ) : null}
       {["catalog", "categories", "collections", "size-guides"].includes(
         section,
       ) && products ? (
@@ -278,39 +289,10 @@ export async function OperationsPage({
         <SupportOperations initialTickets={tickets?.tickets ?? []} />
       ) : null}
       {section === "delivery-settings" ? (
-        <section id="delivery-settings">
-          <h2>
-            <T en="Service zones" ar="مناطق الخدمة" />
-          </h2>
-          <div className="list">
-            {zones?.zones?.length ? (
-              zones.zones.map((zone) => (
-                <article key={String(zone.id)}>
-                  <div>
-                    <strong>
-                      <T en={String(zone.name_en)} ar={String(zone.name_ar)} />
-                    </strong>
-                    <small>
-                      {zone.policy_reviewed
-                        ? "Reviewed / معتمد"
-                        : "Policy review required / يلزم اعتماد السياسة"}
-                    </small>
-                  </div>
-                  <span className="amount">
-                    {(Number(zone.fee_fils) / 1000).toFixed(3)} JOD
-                  </span>
-                </article>
-              ))
-            ) : (
-              <p className="empty">
-                <T
-                  en="No delivery zones configured."
-                  ar="لم يتم إعداد مناطق توصيل."
-                />
-              </p>
-            )}
-          </div>
-        </section>
+        <DeliverySettingsWorkspace
+          zones={zones?.zones ?? []}
+          pickups={pickups?.pickups ?? []}
+        />
       ) : null}
       {![
         "overview",
