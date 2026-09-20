@@ -1,41 +1,46 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
+import { useApiAction } from "@/components/use-api-action";
+import { useLanguage } from "@/components/language-provider";
+import { errorNotice, presentApiError } from "@/lib/api-errors";
+import { requestApi } from "@/lib/client-api";
 
-type AuthResponse={mfaRequired?:boolean;options?:Parameters<typeof startAuthentication>[0]["optionsJSON"];pendingToken?:string;developmentVerificationToken?:string};
+type AuthResponse = { mfaRequired?: boolean; options?: Parameters<typeof startAuthentication>[0]["optionsJSON"]; pendingToken?: string; developmentVerificationToken?: string };
 
-export function AuthPanel({terms}:{terms:{id:string;version:string;title:string}|null}){
-  const[mode,setMode]=useState<"login"|"register">("login");
-  const[message,setMessage]=useState("");
-  const search=useSearchParams();
-  useEffect(()=>{const token=search.get("verifyEmail");if(!token)return;void fetch("/api/v1/auth/verify-email",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token})}).then(response=>setMessage(response.ok?"Email verified. You can sign in. / تم تأكيد البريد":"The verification link is invalid or expired."));},[search]);
-  async function submit(form:FormData){
-    const body=mode==="login"?{email:form.get("email"),password:form.get("password")}:{email:form.get("email"),password:form.get("password"),displayName:form.get("name"),termsDocumentId:terms?.id,language:"en",marketing:form.get("marketing")==="on"};
-    const response=await fetch(`/api/v1/auth/${mode}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
-    const payload=await response.json();
-    const data=payload.data as AuthResponse|undefined;
-    if(response.ok&&mode==="login"&&data?.mfaRequired&&data.options&&data.pendingToken){
-      setMessage("Touch your security key / استخدم مفتاح الأمان");
-      const assertion=await startAuthentication({optionsJSON:data.options});
-      const mfa=await fetch("/api/v1/auth/mfa",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pendingToken:data.pendingToken,response:assertion})});
-      if(mfa.ok)location.reload();else setMessage("MFA failed / فشل التحقق");
-      return;
-    }
-    if(response.ok&&mode==="register"){
-      setMessage(data?.developmentVerificationToken?`Registered. Local verification token: ${data.developmentVerificationToken}`:"Registered. Check your verification message.");
-    }else setMessage(response.ok?"Signed in.":(payload.error?.message??"Unable to continue."));
-    if(response.ok&&mode==="login")location.reload();
+export function AuthPanel({ terms }: { terms: { id: string; version: string; title: string } | null }) {
+  const { text, language } = useLanguage();
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [verificationMessage, setVerificationMessage] = useState("");
+  const [developmentToken, setDevelopmentToken] = useState("");
+  const { pending, perform, message, live } = useApiAction();
+  const search = useSearchParams();
+  useEffect(() => {
+    const token = search.get("verifyEmail");
+    if (!token) return;
+    let active = true;
+    void requestApi("/api/v1/auth/verify-email", { method: "POST", body: { token } })
+      .then(() => { if (active) setVerificationMessage(language === "ar" ? "تم تأكيد البريد. يمكنك تسجيل الدخول." : "Email verified. You can sign in."); })
+      .catch((error) => { if (active) { presentApiError(error); setVerificationMessage(errorNotice(error).description[language]); } });
+    return () => { active = false; };
+  }, [language, search]);
+  async function submit(form: HTMLFormElement) {
+    const values = new FormData(form);
+    let verificationToken = "";
+    const completed = await perform(async () => {
+      const body = mode === "login" ? { email: values.get("email"), password: values.get("password") } : { email: values.get("email"), password: values.get("password"), displayName: values.get("name"), termsDocumentId: terms?.id, language, marketing: values.get("marketing") === "on" };
+      const data = await requestApi<AuthResponse>(`/api/v1/auth/${mode}`, { method: "POST", body });
+      if (mode === "login" && data.mfaRequired && data.options && data.pendingToken) {
+        const assertion = await startAuthentication({ optionsJSON: data.options });
+        await requestApi("/api/v1/auth/mfa", { method: "POST", body: { pendingToken: data.pendingToken, response: assertion } });
+      }
+      verificationToken = data.developmentVerificationToken ?? "";
+    }, mode === "login" ? { en: "Signed in.", ar: "تم تسجيل الدخول." } : { en: "Account created. Check your verification message.", ar: "تم إنشاء الحساب. تحقق من رسالة التأكيد." });
+    if (!completed) return;
+    if (mode === "login") location.reload();
+    else { setDevelopmentToken(verificationToken); form.reset(); }
   }
-  return <section className="panel">
-    <div className="tabs"><button aria-pressed={mode==="login"} onClick={()=>setMode("login")}>Sign in / دخول</button><button aria-pressed={mode==="register"} onClick={()=>setMode("register")}>Create account / حساب جديد</button></div>
-    <form action={submit}>
-      {mode==="register"?<label>Name / الاسم<input name="name" required minLength={2}/></label>:null}
-      <label>Email / البريد<input name="email" type="email" required/></label>
-      <label>Password / كلمة المرور<input name="password" type="password" required minLength={12}/></label>
-      {mode==="register"?<>{terms?<><article className="notice"><strong>{terms.title}</strong><span>Version {terms.version}</span></article><label className="check"><input name="accept" type="checkbox" required/>I accept this version / أوافق على هذه النسخة</label></>:<p className="alert">Registration is unavailable until reviewed terms are published.</p>}<label className="check"><input name="marketing" type="checkbox"/>Optional marketing / تسويق اختياري</label></>:null}
-      <button className="primary" type="submit" disabled={mode==="register"&&!terms}>Continue / متابعة</button>
-    </form>
-    <p aria-live="polite">{message}</p>
-  </section>;
+  return <section className="panel"><div className="tabs"><button aria-pressed={mode === "login"} disabled={pending} onClick={() => setMode("login")}>{text("Sign in", "دخول")}</button><button aria-pressed={mode === "register"} disabled={pending} onClick={() => setMode("register")}>{text("Create account", "حساب جديد")}</button></div><form onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>{mode === "register" ? <label>{text("Name", "الاسم")}<input name="name" required minLength={2} /></label> : null}<label>{text("Email", "البريد")}<input name="email" type="email" required /></label><label>{text("Password", "كلمة المرور")}<input name="password" type="password" required minLength={12} /></label>{mode === "register" ? <>{terms ? <><article className="notice"><strong>{terms.title}</strong><span>{text("Version", "الإصدار")} {terms.version}</span></article><label className="check"><input name="accept" type="checkbox" required />{text("I accept this version", "أوافق على هذه النسخة")}</label></> : <p className="alert">{text("Registration is unavailable until reviewed terms are published.", "التسجيل غير متاح حتى نشر الشروط المعتمدة.")}</p>}<label className="check"><input name="marketing" type="checkbox" />{text("Optional marketing", "تسويق اختياري")}</label></> : null}<button className="primary" type="submit" disabled={pending || (mode === "register" && !terms)}>{text(pending ? "Continuing…" : "Continue", pending ? "جارٍ المتابعة…" : "متابعة")}</button></form>{developmentToken ? <output className="secret">{text("Local verification token", "رمز التحقق المحلي")}: {developmentToken}</output> : null}<p aria-live="polite">{verificationMessage}</p><p aria-live={live}>{message}</p></section>;
 }

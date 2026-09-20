@@ -47,6 +47,26 @@ test("profile and address failures offer specific safe recovery", () => {
     assert.doesNotMatch(JSON.stringify(notice), /private/);
   }
 });
+test("account security, review and verification errors provide safe next steps", () => {
+  for (const [code, pattern] of [
+    ["INVALID_CREDENTIALS", /email|password|credentials/i],
+    ["RESET_TOKEN_INVALID", /reset|link|token/i],
+    ["SESSION_REVOKE_FAILED", /session/i],
+    ["DELETION_CONFIRMATION_INVALID", /delete|confirmation/i],
+    ["DELETION_REQUEST_FAILED", /deletion|account/i],
+    ["REVIEW_NOT_ELIGIBLE", /review|delivery/i],
+    ["REVIEW_EDIT_COOLDOWN", /day|wait|edit/i],
+    ["VERIFIED_CONTACTS_REQUIRED", /email|phone/i],
+    ["PHISHING_RESISTANT_MFA_REQUIRED", /security key|verification/i],
+    ["SAVED_RECOVERY_SECRET_REQUIRED", /recovery/i],
+    ["VERIFICATION_REAPPLICATION_COOLDOWN", /reapply|month|wait/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 422));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.equal(notice.title.en.includes(code), false);
+  }
+});
 test("referral and notice errors provide specific localized recovery", () => {
   for (const [code, pattern] of [
     ["VERIFICATION_REQUIRED", /partner|verification/i],
