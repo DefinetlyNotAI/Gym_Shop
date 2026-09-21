@@ -34,3 +34,41 @@ INSERT INTO product_variant(id,product_id,sku,option_values,enabled,purchasable,
 ('50000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','SIM-SHIRT-M','{"Size":"M"}',true,true,true),
 ('50000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000002','SIM-BOTTLE','{}',true,true,true) ON CONFLICT DO NOTHING;
 INSERT INTO inventory_balance(variant_id,on_hand,reserved) VALUES('50000000-0000-4000-8000-000000000001',25,0),('50000000-0000-4000-8000-000000000002',25,0) ON CONFLICT DO NOTHING;
+
+INSERT INTO verification_application(
+  id,public_id,account_id,public_name,reason,platforms,evidence_media_ids,status,
+  reviewer_id,decision_reason,decided_at
+) VALUES (
+  '60000000-0000-4000-8000-000000000001','ver_simulation_customer',
+  '00000000-0000-4000-8000-000000000001','Simulation Customer',
+  'Approved fixture for exercising the local payout proof of concept.',
+  '[]'::jsonb,ARRAY[]::uuid[],'APPROVED',
+  '00000000-0000-4000-8000-000000000002',
+  'Local simulation fixture only; no production verification.',now()
+) ON CONFLICT DO NOTHING;
+INSERT INTO verification_transition(
+  id,application_id,from_status,to_status,action,reason,actor_id
+) VALUES (
+  '60000000-0000-4000-8000-000000000002',
+  '60000000-0000-4000-8000-000000000001',NULL,'APPROVED','APPROVED',
+  'Local simulation fixture only; no production verification.',
+  '00000000-0000-4000-8000-000000000002'
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO wallet_lot(
+  id,account_id,source_type,source_id,original_fils,available_fils,settled,disputed
+) VALUES (
+  '70000000-0000-4000-8000-000000000001',
+  '00000000-0000-4000-8000-000000000001',
+  'SIMULATION','payout-proof-of-concept',25000,25000,true,false
+) ON CONFLICT DO NOTHING;
+INSERT INTO wallet_ledger(
+  id,account_id,lot_id,direction,kind,amount_fils,source_type,source_id,operation_key,reason
+) VALUES (
+  '70000000-0000-4000-8000-000000000002',
+  '00000000-0000-4000-8000-000000000001',
+  '70000000-0000-4000-8000-000000000001',
+  'CREDIT','CREDIT',25000,'SIMULATION','payout-proof-of-concept',
+  'simulation:payout-proof-of-concept:opening-wallet',
+  'Ephemeral local fixture for exercising wallet payout controls.'
+) ON CONFLICT DO NOTHING;

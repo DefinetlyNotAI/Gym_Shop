@@ -68,7 +68,12 @@ import {
   reinstateVerification,
   submitVerification,
 } from "@/lib/verification/service";
-import { getPayoutAvailability, requestPayout } from "@/lib/payouts/service";
+import {
+  decidePayout,
+  executePayout,
+  getPayoutAvailability,
+  requestPayout,
+} from "@/lib/payouts/service";
 import { adjustInventory } from "@/lib/inventory/operations";
 import {
   createCampaign as createNotificationCampaign,
@@ -119,6 +124,7 @@ async function tableNames(names: string[]) {
 describe("v0.2 release journeys", () => {
   beforeAll(async () => {
     process.env.APP_ENV = "test";
+    process.env.SIM_MODE = "1";
     database = new PGlite({ extensions: { pgcrypto } });
     await database.waitReady;
     orm = drizzlePglite({ client: database });
@@ -617,7 +623,7 @@ describe("v0.2 release journeys", () => {
     expect(rewards.rows[0]).toMatchObject({ count: 1, milli_points: "10000" });
   });
 
-  it("requires hardened verification and keeps payouts visibly provider-gated without wallet holds", async () => {
+  it("runs the verified payout lifecycle in simulation without weakening production readiness", async () => {
     const applicant = await client.execute<{ id: string }>(
       "INSERT INTO account(email_normalized,password_hash,display_name,status,email_verified_at,phone_verified_at) VALUES('partner@v02.test','hash','Partner','ACTIVE',now(),now()) RETURNING id",
     );
@@ -682,33 +688,99 @@ describe("v0.2 release journeys", () => {
       sourceId: "pre-verification-referral",
       operationKey: "wallet:pre-verification-referral",
     });
+    await client.execute(
+      "INSERT INTO account_session(account_id,token_hash,authenticated_at,expires_at) VALUES($1,'payout-recent-session',now(),now()+interval '1 hour')",
+      [applicant.rows[0].id],
+    );
     expect(await getPayoutAvailability(applicant.rows[0].id)).toMatchObject({
       verified: true,
       withdrawableFils: 30_000,
-      providerAvailable: false,
+      providerAvailable: true,
       provider: {
         name: "Amazon Payment Services",
-        available: false,
-        code: "PAYOUT_PROVIDER_UNAVAILABLE",
+        available: true,
+        mode: "SIMULATION",
+        code: "PAYOUT_PROVIDER_SIMULATION",
       },
     });
-    await expect(
-      requestPayout(applicant.rows[0].id, {
-        destinationId: crypto.randomUUID(),
+    const requested = await requestPayout(applicant.rows[0].id, {
+      destinationAlias: "Simulation bank ••0042",
+      amountFils: 25_000,
+      idempotencyKey: "payout-simulation-completed",
+    });
+    expect(
+      await requestPayout(applicant.rows[0].id, {
+        destinationAlias: "Simulation bank ••0042",
         amountFils: 25_000,
-        idempotencyKey: "payout-provider-gated",
+        idempotencyKey: "payout-simulation-completed",
       }),
-    ).rejects.toThrow("PAYOUT_PROVIDER_UNAVAILABLE");
-    const noMutation = await client.execute<{ payouts: number; held: string }>(
-      "SELECT (SELECT count(*)::int FROM wallet_payout WHERE account_id=$1) AS payouts,(SELECT COALESCE(sum(held_fils),0)::text FROM wallet_lot WHERE account_id=$1) AS held",
+    ).toEqual(requested);
+    await expect(
+      decidePayout(applicant.rows[0].id, requested.publicId, {
+        decision: "APPROVE",
+        reason: "self approval",
+      }),
+    ).rejects.toThrow("PAYOUT_SELF_REVIEW_DENIED");
+    await decidePayout(reviewer.rows[0].id, requested.publicId, {
+      decision: "APPROVE",
+      reason: "Finance simulation approval",
+    });
+    expect(
+      await executePayout(reviewer.rows[0].id, requested.publicId, {
+        simulationOutcome: "COMPLETED",
+      }),
+    ).toMatchObject({
+      publicId: requested.publicId,
+      status: "COMPLETED",
+      providerReference: `sim_payout_${requested.publicId}`,
+    });
+    const completedWallet = await client.execute<{
+      available: string;
+      held: string;
+      paid_out: string;
+    }>(
+      `SELECT COALESCE(sum(available_fils),0)::text AS available,
+              COALESCE(sum(held_fils),0)::text AS held,
+              COALESCE((SELECT sum(amount_fils) FROM wallet_ledger WHERE account_id=$1 AND kind='PAYOUT'),0)::text AS paid_out
+       FROM wallet_lot WHERE account_id=$1`,
       [applicant.rows[0].id],
     );
-    expect(noMutation.rows[0]).toMatchObject({ payouts: 0, held: "0" });
+    expect(completedWallet.rows[0]).toEqual({
+      available: "5000",
+      held: "0",
+      paid_out: "25000",
+    });
+
+    const uncertain = await requestPayout(applicant.rows[0].id, {
+      destinationAlias: "Simulation bank ••0042",
+      amountFils: 5_000,
+      idempotencyKey: "payout-simulation-unknown",
+    });
+    await decidePayout(reviewer.rows[0].id, uncertain.publicId, {
+      decision: "APPROVE",
+      reason: "Finance simulation approval",
+    });
+    expect(
+      await executePayout(reviewer.rows[0].id, uncertain.publicId, {
+        simulationOutcome: "UNKNOWN",
+      }),
+    ).toMatchObject({ status: "UNKNOWN" });
+    expect(await getPayoutAvailability(applicant.rows[0].id)).toMatchObject({
+      withdrawableFils: 0,
+    });
+    expect(
+      await executePayout(reviewer.rows[0].id, uncertain.publicId, {
+        simulationOutcome: "FAILED",
+      }),
+    ).toMatchObject({ status: "FAILED" });
+    expect(await getPayoutAvailability(applicant.rows[0].id)).toMatchObject({
+      withdrawableFils: 5_000,
+    });
     await revokeVerification(applicant.rows[0].id, "No longer participating");
     expect(await getPayoutAvailability(applicant.rows[0].id)).toMatchObject({
       verified: false,
       withdrawableFils: 0,
-      providerAvailable: false,
+      providerAvailable: true,
     });
     await expect(
       customizeReferralCode(applicant.rows[0].id, "PARTNER_2027"),
@@ -924,9 +996,11 @@ describe("v0.2 release journeys", () => {
     expect(await v02ReleaseReadiness(client)).toEqual({
       softwareReady: true,
       missingSoftwareEvidence: [],
+      payoutSimulationAvailable: true,
+      proofOfConceptReady: true,
       payoutProviderAvailable: false,
       activationReady: false,
-      blockers: ["PAYOUT_PROVIDER_UNAVAILABLE"],
+      blockers: ["PAYOUT_PROVIDER_SIMULATION_ONLY"],
     });
   });
 
@@ -941,9 +1015,11 @@ describe("v0.2 release journeys", () => {
       expect(await v02ReleaseReadiness(client)).toEqual({
         softwareReady: true,
         missingSoftwareEvidence: [],
+        payoutSimulationAvailable: true,
+        proofOfConceptReady: true,
         payoutProviderAvailable: false,
         activationReady: false,
-        blockers: ["PAYOUT_PROVIDER_UNAVAILABLE"],
+        blockers: ["PAYOUT_PROVIDER_SIMULATION_ONLY"],
       });
     } finally {
       await client.execute(

@@ -34,13 +34,18 @@ export async function v02ReleaseReadiness(client: DatabaseClient) {
   const missingSoftwareEvidence = V02_TABLES.filter((table) => !found.has(table));
   const provider = await client.execute<{ value: unknown }>("SELECT value FROM app_setting WHERE key='payout.provider'");
   const payoutProvider = getPayoutProviderStatus();
-  const payoutProviderAvailable = payoutProvider.available && provider.rows[0]?.value === "ACTIVE";
+  const payoutSimulationAvailable = payoutProvider.available && payoutProvider.mode === "SIMULATION";
+  const payoutProviderAvailable = payoutProvider.available && payoutProvider.mode !== "SIMULATION" && provider.rows[0]?.value === "ACTIVE";
   const softwareReady = missingSoftwareEvidence.length === 0;
   return {
     softwareReady,
     missingSoftwareEvidence,
+    payoutSimulationAvailable,
+    proofOfConceptReady: softwareReady && (payoutSimulationAvailable || payoutProviderAvailable),
     payoutProviderAvailable,
     activationReady: softwareReady && payoutProviderAvailable,
-    blockers: payoutProviderAvailable ? [] : [payoutProvider.code],
+    blockers: payoutProviderAvailable
+      ? []
+      : [payoutSimulationAvailable ? "PAYOUT_PROVIDER_SIMULATION_ONLY" : payoutProvider.code],
   };
 }

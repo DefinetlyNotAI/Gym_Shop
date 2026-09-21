@@ -20,7 +20,16 @@ export async function POST(request: Request) {
     const account = requireCustomer(await getCurrentAccount());
     return apiSuccess(await requestPayout(account.id, await request.json()), { status: 201 });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "PAYOUT_REQUEST_FAILED";
-    return apiError(code === "PAYOUT_PROVIDER_UNAVAILABLE" ? 503 : 422, { code, message: getPayoutProviderStatus().reason });
+    const rawCode = error instanceof Error ? error.message : "";
+    const code = /^[A-Z][A-Z0-9_]+$/.test(rawCode)
+      ? rawCode
+      : "PAYOUT_REQUEST_INVALID";
+    const providerUnavailable = code === "PAYOUT_PROVIDER_UNAVAILABLE";
+    return apiError(providerUnavailable ? 503 : 422, {
+      code,
+      message: providerUnavailable
+        ? getPayoutProviderStatus().reason
+        : "The payout request could not be submitted.",
+    });
   }
 }

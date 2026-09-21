@@ -11,6 +11,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     return apiSuccess(await decidePayout(actor.id, id, await request.json()));
   } catch (error) {
-    return apiError(422, { code: error instanceof Error ? error.message : "PAYOUT_DECISION_FAILED", message: "The payout decision could not be applied." });
+    const rawCode = error instanceof Error ? error.message : "";
+    const code = /^[A-Z][A-Z0-9_]+$/.test(rawCode)
+      ? rawCode
+      : "PAYOUT_DECISION_INVALID";
+    return apiError(422, { code, message: "The payout decision could not be applied." });
   }
 }
