@@ -17,6 +17,34 @@ test("staff defaults to port 4000 and links to the storefront on port 3030", asy
   assert.match(switcher, /http:\/\/localhost:3030/);
 });
 
+test("staff server links use the local storefront during development", async () => {
+  const source = await readFile(
+    new URL("../src/lib/runtime-origin.ts", import.meta.url),
+    "utf8",
+  );
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    },
+  }).outputText;
+  const runtimeModule = await import(
+    `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}#storefront`
+  );
+  assert.equal(
+    runtimeModule.configuredStorefrontOrigin({ NODE_ENV: "development" }),
+    "http://localhost:3030",
+  );
+  assert.equal(
+    runtimeModule.configuredStorefrontOrigin({ NODE_ENV: "production" }),
+    "https://example.com",
+  );
+  assert.throws(
+    () => runtimeModule.configuredStorefrontOrigin({ STOREFRONT_ORIGIN: "http://localhost:3030/path" }),
+    /exact origin/,
+  );
+});
+
 test("staff development proxies to the local API on port 5000 by default", async () => {
   const source = await readFile(
     new URL("../next.config.ts", import.meta.url),

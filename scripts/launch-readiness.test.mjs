@@ -15,6 +15,7 @@ test("every known launch blocker has concise bilingual recovery copy", () => {
     "BILINGUAL_TERMS_MISSING",
     "FULFILLMENT_UNCONFIGURED",
     "CTO_RECOVERY_DRILL_NOT_PASSED",
+    "PAYOUT_PROVIDER_SIMULATION_ONLY",
   ]) {
     const item = readinessBlockerCopy(code);
     assert.ok(item.title.en.length > 4);
@@ -23,6 +24,13 @@ test("every known launch blocker has concise bilingual recovery copy", () => {
     assert.ok(item.description.ar.length > 12);
     assert.equal(item.title.en.includes(code), false);
   }
+});
+
+test("simulation-only payout readiness explains the production boundary", () => {
+  const item = readinessBlockerCopy("PAYOUT_PROVIDER_SIMULATION_ONLY");
+  assert.match(item.title.en, /simulation/i);
+  assert.match(item.description.en, /production|APS/i);
+  assert.doesNotMatch(item.description.en, /PAYOUT_PROVIDER_SIMULATION_ONLY/);
 });
 
 test("unknown launch blockers remain safe and non-technical", () => {

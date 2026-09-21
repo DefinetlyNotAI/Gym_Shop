@@ -9,6 +9,7 @@ import {
 } from "@/components/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { SimulationSwitcher } from "@/components/simulation-switcher";
+import { configuredStorefrontOrigin } from "@/lib/runtime-origin";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { getSession } from "@/lib/api";
 import { ApiToasts } from "@/components/api-toasts";
@@ -54,7 +55,7 @@ export default async function RootLayout({
               </span>
             </Link>
             <div className="header-utilities">
-              <a href={process.env.STOREFRONT_ORIGIN ?? "https://example.com"}>
+              <a href={configuredStorefrontOrigin(process.env)}>
                 <LocalizedText en="Customer store" ar="متجر العملاء" />
               </a>
               <LanguageSwitcher />

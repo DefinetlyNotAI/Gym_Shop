@@ -2460,3 +2460,131 @@ details > :not(summary) + :not(summary) {
     width: 100%;
   }
 }
+
+.payout-operations {
+  display: grid;
+  gap: 1rem;
+}
+.payout-operations-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.payout-operations-heading > div {
+  display: grid;
+  gap: 0.35rem;
+}
+.payout-provider-notice {
+  padding: 1rem 1.15rem;
+  border: 1px solid #dcc7a6;
+  border-inline-start: 4px solid #9a743a;
+  border-radius: 0.7rem;
+  background: #fbf5e9;
+  color: #665136;
+  line-height: 1.65;
+}
+.payout-provider-notice strong {
+  color: #493821;
+}
+.payout-provider-notice.is-simulation {
+  border-color: #b9ccca;
+  border-inline-start-color: #527e78;
+  background: #eef6f4;
+  color: #3f625e;
+}
+.payout-provider-notice.is-simulation strong {
+  color: #244d48;
+}
+.payout-operations-list {
+  gap: 0.9rem;
+}
+.payout-operation-card {
+  display: grid;
+  gap: 1rem;
+  overflow: hidden;
+  padding: clamp(1rem, 2.2vw, 1.35rem);
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--surface);
+  box-shadow: 0 10px 28px rgba(38, 55, 45, 0.06);
+}
+.payout-operation-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.payout-operation-card > header > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
+}
+.payout-operation-card > header strong,
+.payout-operation-card code {
+  overflow-wrap: anywhere;
+}
+.payout-operation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 1rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+.payout-operation-meta > span:first-child {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 750;
+}
+.payout-operation-meta code {
+  padding: 0.25rem 0.45rem;
+  border-radius: 0.35rem;
+  background: #eef1eb;
+  color: #435248;
+  font-size: 0.75rem;
+}
+.payout-review-form {
+  padding-block-start: 1rem;
+  border-block-start: 1px solid var(--border);
+}
+.payout-review-form button {
+  align-self: end;
+}
+.payout-simulation-actions {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #c9d7d4;
+  border-radius: 0.65rem;
+  background: #f3f8f6;
+}
+.payout-simulation-actions .inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.payout-simulation-actions button {
+  min-height: 42px;
+}
+@media (max-width: 720px) {
+  .payout-operations-heading,
+  .payout-operation-card > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .payout-operations-heading .status-badge,
+  .payout-operation-card > header .status-badge {
+    align-self: flex-start;
+  }
+  .payout-review-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .payout-review-form button,
+  .payout-simulation-actions button {
+    width: 100%;
+  }
+  .payout-simulation-actions .inline-actions {
+    display: grid;
+  }
+}

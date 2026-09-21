@@ -208,6 +208,20 @@ test("wallet and unavailable payout errors provide truthful financial guidance",
   );
   assert.match(payout.description.en, /unavailable|not available/i);
   assert.equal(payout.recovery, "none");
+  for (const [code, pattern] of [
+    ["PAYOUT_SELF_REVIEW_DENIED", /independent|another/i],
+    ["PAYOUT_NOT_REVIEWABLE", /state|review/i],
+    ["PAYOUT_NOT_EXECUTABLE", /approved|state|refresh/i],
+    ["PAYOUT_SELF_EXECUTION_DENIED", /another|independent/i],
+    ["PAYOUT_EXECUTION_FAILED", /simulation|payout/i],
+    ["PAYOUT_DECISION_INVALID", /decision|review/i],
+    ["PAYOUT_EXECUTION_INVALID", /simulation|outcome/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 422));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.notEqual(notice.title.en, code);
+  }
 });
 test("status fallbacks classify session, permission, stale state and rate limits", () => {
   for (const [status, recovery] of [

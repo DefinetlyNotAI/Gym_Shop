@@ -27,6 +27,7 @@ import {
   operationsRequests,
   routesForRole,
 } from "@/lib/operations-routes";
+import { configuredStorefrontOrigin } from "@/lib/runtime-origin";
 
 type Row = Record<string, unknown>;
 type Rows = {
@@ -129,6 +130,8 @@ export async function OperationsPage({
     releases?: {
       v02?: {
         softwareReady?: boolean;
+        payoutSimulationAvailable?: boolean;
+        proofOfConceptReady?: boolean;
         payoutProviderAvailable?: boolean;
         activationReady?: boolean;
         blockers?: string[];
@@ -259,7 +262,7 @@ export async function OperationsPage({
           canEdit={["CTO", "SUPER_ADMIN", "ADMIN", "LOGISTICS_STAFF"].includes(
             actor.role,
           )}
-          storeOrigin={process.env.STOREFRONT_ORIGIN ?? "https://example.com"}
+          storeOrigin={configuredStorefrontOrigin(process.env)}
         />
       ) : null}
       {section === "orders" ? (
@@ -347,6 +350,7 @@ export async function OperationsPage({
               provider: {
                 name: "Amazon Payment Services",
                 available: false,
+                mode: "UNAVAILABLE",
                 code: "PAYOUT_PROVIDER_UNAVAILABLE",
                 reason:
                   "APS wallet withdrawal capability and integration evidence are not verified.",

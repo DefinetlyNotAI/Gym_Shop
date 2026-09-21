@@ -1,8 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/components/language-provider";
 import { useApiAction } from "@/components/use-api-action";
 import { requestApi } from "@/lib/client-api";
+import {
+  executeSimulatedPayout,
+  reviewPayout,
+} from "@/lib/payout-actions";
 
 export type VerificationQueue = { applications: {
   public_id: string; public_name: string; reason: string; platforms: { name: string; url: string }[];
@@ -11,8 +16,8 @@ export type VerificationQueue = { applications: {
 }[] };
 
 export type PayoutQueue = { payouts: {
-  public_id: string; amount_fils: string; status: string; requested_at: string; account_public_id: string; alias_masked: string;
-}[]; provider: { name: string; available: false; code: string; reason: string } };
+  public_id: string; amount_fils: string; status: string; requested_at: string; completed_at: string | null; provider_reference: string | null; account_public_id: string; alias_masked: string;
+}[]; provider: { name: string; available: boolean; mode: "SIMULATION" | "UNAVAILABLE"; code: string; reason: string } };
 
 export function VerificationOperations({ queue }: { queue: VerificationQueue }) {
   const router = useRouter();
@@ -22,5 +27,35 @@ export function VerificationOperations({ queue }: { queue: VerificationQueue }) 
 }
 
 export function PayoutOperations({ queue }: { queue: PayoutQueue }) {
-  return <section id="payouts"><h2>{queue.provider.name} · Wallet payout operations</h2><p><strong>Withdrawals unavailable.</strong> {queue.provider.reason}</p><p>No payout can be requested, approved, executed, or marked complete without documented APS beneficiary-disbursement capability and verified integration evidence.</p><div className="list">{queue.payouts.length?queue.payouts.map((item)=><article key={item.public_id}><strong>{item.public_id} · {item.status}</strong><span>{item.account_public_id} · {(Number(item.amount_fils)/1000).toFixed(3)} JOD · {item.alias_masked}</span></article>):<p>No payout records. UNKNOWN payouts, if any, are sorted first for reconciliation.</p>}</div></section>;
+  const { text } = useLanguage();
+  const router = useRouter();
+  const { pending, perform, message, live } = useApiAction();
+  const simulation = queue.provider.available && queue.provider.mode === "SIMULATION";
+  async function review(publicId: string, form: HTMLFormElement) {
+    const values = new FormData(form);
+    const decision = String(values.get("decision")) as "APPROVE" | "REJECT" | "CANCEL";
+    const completed = await perform(
+      () => reviewPayout(publicId, decision, String(values.get("reason") ?? "")).then(() => undefined),
+      { en: "Finance payout decision recorded.", ar: "تم تسجيل قرار فريق المالية بشأن السحب." },
+    );
+    if (completed) router.refresh();
+  }
+  async function execute(publicId: string, outcome: "COMPLETED" | "FAILED" | "UNKNOWN") {
+    const completed = await perform(
+      () => executeSimulatedPayout(publicId, outcome).then(() => undefined),
+      { en: `Simulated payout recorded as ${outcome.toLowerCase()}.`, ar: "تم تسجيل نتيجة السحب التجريبي." },
+    );
+    if (completed) router.refresh();
+  }
+  return <section id="payouts" className="payout-operations">
+    <header className="payout-operations-heading"><div><span className="eyebrow">{queue.provider.name}</span><h2>{text("Wallet payout operations", "عمليات سحب المحفظة")}</h2></div><span className="status-badge">{simulation ? text("Simulation only", "محاكاة فقط") : text("Unavailable", "غير متاح")}</span></header>
+    <p className={`payout-provider-notice ${simulation ? "is-simulation" : "is-unavailable"}`}><strong>{simulation ? text("Proof-of-concept environment.", "بيئة إثبات مفهوم.") : text("Withdrawals unavailable.", "عمليات السحب غير متاحة.")}</strong> {simulation ? text("Review, execute, and reconcile test payouts here. No APS request or real-money movement occurs, and production remains fail-closed.", "راجع طلبات السحب التجريبية ونفذها وسوّها هنا. لا يتم إرسال طلب إلى APS أو تحويل أموال حقيقية، ويظل الإنتاج مغلقاً بأمان.") : queue.provider.reason}</p>
+    <p className="operation-result" aria-live={live}>{message}</p>
+    <div className="list payout-operations-list">{queue.payouts.length ? queue.payouts.map((item) => <article className="payout-operation-card" key={item.public_id}>
+      <header><div><strong>{item.public_id}</strong><small>{item.account_public_id} · {item.alias_masked}</small></div><span className="status-badge">{item.status.replaceAll("_", " ")}</span></header>
+      <div className="payout-operation-meta"><span>{(Number(item.amount_fils)/1000).toFixed(3)} JOD</span><span>{new Date(item.requested_at).toLocaleString()}</span>{item.provider_reference?<code>{item.provider_reference}</code>:null}</div>
+      {simulation && ["REQUESTED", "UNDER_REVIEW"].includes(item.status) ? <form className="operation-form-grid payout-review-form" onSubmit={(event) => { event.preventDefault(); void review(item.public_id, event.currentTarget); }}><label>{text("Decision", "القرار")}<select name="decision" defaultValue="APPROVE"><option value="APPROVE">{text("Approve", "موافقة")}</option><option value="REJECT">{text("Reject", "رفض")}</option><option value="CANCEL">{text("Cancel", "إلغاء")}</option></select></label><label>{text("Independent review reason", "سبب المراجعة المستقلة")}<input name="reason" required minLength={3} maxLength={2000} /></label><button className="secondary" disabled={pending}>{text("Record decision", "تسجيل القرار")}</button></form> : null}
+      {simulation && ["APPROVED", "UNKNOWN"].includes(item.status) ? <div className="payout-simulation-actions"><p><strong>{item.status === "UNKNOWN" ? text("Reconcile the unknown result", "تسوية النتيجة المجهولة") : text("Choose the simulated provider result", "اختر نتيجة المزود التجريبية")}</strong></p><div className="inline-actions"><button disabled={pending} type="button" onClick={() => void execute(item.public_id, "COMPLETED")}>{text("Complete", "مكتمل")}</button><button className="secondary" disabled={pending} type="button" onClick={() => void execute(item.public_id, "FAILED")}>{text("Fail and release", "فشل وإعادة الرصيد")}</button>{item.status === "APPROVED"?<button className="secondary" disabled={pending} type="button" onClick={() => void execute(item.public_id, "UNKNOWN")}>{text("Mark unknown", "وضع مجهول")}</button>:null}</div></div> : null}
+    </article>) : <p>{text("No payout records. Unknown payouts will appear first for reconciliation.", "لا توجد طلبات سحب. ستظهر الطلبات مجهولة النتيجة أولاً للتسوية.")}</p>}</div>
+  </section>;
 }

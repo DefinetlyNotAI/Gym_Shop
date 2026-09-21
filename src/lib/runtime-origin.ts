@@ -12,3 +12,20 @@ export function configuredServerApiOrigin(
   }
   return value;
 }
+
+export function configuredStorefrontOrigin(
+  environment: Record<string, string | undefined>,
+): string {
+  const value =
+    environment.STOREFRONT_ORIGIN ??
+    (environment.NODE_ENV === "development"
+      ? "http://localhost:3030"
+      : "https://example.com");
+  const url = new URL(value);
+  if (url.origin !== value || url.username || url.password) {
+    throw new Error(
+      "STOREFRONT_ORIGIN must be an exact origin without credentials or a path",
+    );
+  }
+  return value;
+}
