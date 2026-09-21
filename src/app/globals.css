@@ -1710,3 +1710,79 @@ details > :not(summary) + :not(summary) {
     width: 100%;
   }
 }
+
+.payout-provider-card {
+  position: relative;
+  overflow: hidden;
+}
+.payout-provider-card::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  background: var(--border);
+}
+.payout-provider-card.is-simulation::before {
+  background: #9b6b2f;
+}
+.payout-provider-card.is-simulation {
+  background:
+    radial-gradient(circle at 100% 0, #f0dfb540, transparent 34%),
+    var(--surface);
+}
+.payout-provider-heading,
+.payout-history article > div {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.payout-provider-heading h2,
+.payout-provider-heading p {
+  margin: 0;
+}
+.payout-provider-card.is-simulation .payout-provider-heading .status-badge {
+  border-color: #c7a66d;
+  background: #fff8e8;
+  color: #68471c;
+}
+.payout-request-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: clamp(1rem, 2.5vw, 1.4rem);
+  border: 1px solid #d9c7a5;
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--raised) 82%, #fff8e8);
+}
+.payout-form-submit {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  padding-block-start: 0.2rem;
+}
+.payout-form-submit small {
+  flex: 1 1 15rem;
+  color: var(--muted);
+}
+.payout-history article {
+  gap: 0.45rem;
+}
+.payout-history small {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 620px) {
+  .payout-request-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .payout-form-submit {
+    grid-column: auto;
+  }
+  .payout-form-submit button {
+    width: 100%;
+  }
+}

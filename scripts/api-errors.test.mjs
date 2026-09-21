@@ -166,6 +166,19 @@ test("wallet and unavailable payout errors provide truthful financial guidance",
   );
   assert.match(payout.description.en, /unavailable|not available/i);
   assert.equal(payout.recovery, "none");
+  for (const [code, pattern] of [
+    ["PAYOUT_AMOUNT_INVALID", /amount|greater than zero/i],
+    ["PAYOUT_REQUEST_INVALID", /request|details/i],
+    ["PAYOUT_DESTINATION_REQUIRED", /destination|label/i],
+    ["PAYOUT_SIMULATION_DESTINATION_REQUIRED", /simulation|destination/i],
+    ["PAYOUT_VERIFICATION_OR_RECENT_AUTH_REQUIRED", /verification|sign in|authentication/i],
+    ["PAYOUT_DESTINATION_UNAVAILABLE", /destination|available/i],
+  ]) {
+    const notice = errorNotice(apiErrorFromPayload({ error: { code } }, 422));
+    assert.match(notice.title.en + " " + notice.description.en, pattern);
+    assert.ok(notice.title.ar && notice.description.ar);
+    assert.notEqual(notice.title.en, code);
+  }
 });
 test("status fallbacks classify session, permission, stale state and rate limits", () => {
   for (const [status, recovery] of [

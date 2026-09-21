@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PrivateMediaUpload } from "@/components/private-media-upload";
 import { useApiAction } from "@/components/use-api-action";
 import { useLanguage } from "@/components/language-provider";
 import { requestApi } from "@/lib/client-api";
+import { requestSimulatedPayout } from "@/lib/payout-actions";
 
 export type VerificationSummary = {
   status: string;
@@ -19,8 +20,8 @@ export type PayoutAvailability = {
   withdrawableFils: number;
   minimumFils: number | null;
   providerAvailable: boolean;
-  provider: { name: string; code: string; reason: string };
-  history: { public_id: string; amount_fils: string; status: string; requested_at: string; alias_masked: string }[];
+  provider: { name: string; available: boolean; mode: "SIMULATION" | "UNAVAILABLE"; code: string; reason: string };
+  history: { public_id: string; amount_fils: string; status: string; requested_at: string; alias_masked: string; provider_reference: string | null }[];
 };
 
 export function VerificationPanel({ summary }: { summary: VerificationSummary }) {
@@ -45,8 +46,39 @@ export function VerificationPanel({ summary }: { summary: VerificationSummary })
 
 export function PayoutPanel({ availability }: { availability: PayoutAvailability }) {
   const { text } = useLanguage();
+  const router = useRouter();
+  const { pending, perform, message, live } = useApiAction();
+  const idempotencyKey = useRef<string | null>(null);
+  const simulation = availability.providerAvailable && availability.provider.mode === "SIMULATION";
+  async function request(form: HTMLFormElement) {
+    const values = new FormData(form);
+    idempotencyKey.current ??= crypto.randomUUID();
+    const completed = await perform(
+      () => requestSimulatedPayout({
+        destinationAlias: String(values.get("destinationAlias") ?? ""),
+        amountJod: String(values.get("amountJod") ?? ""),
+      }, undefined, () => idempotencyKey.current!).then(() => undefined),
+      {
+        en: "Simulated payout requested. Wallet funds are held for Finance review.",
+        ar: "تم طلب السحب التجريبي. حُجز الرصيد لمراجعة فريق المالية.",
+      },
+    );
+    if (completed) { idempotencyKey.current = null; form.reset(); router.refresh(); }
+  }
   return <>
     <section className="panel"><p className="eyebrow">{text("Withdrawable wallet", "الرصيد القابل للسحب")}</p><h2>{(availability.withdrawableFils/1000).toFixed(3)} JOD</h2><p>{availability.verified?text("All settled, undisputed wallet sources are eligible.", "جميع مصادر المحفظة المسوّاة وغير المتنازع عليها مؤهلة."):text("Partner verification is required before wallet funds become withdrawable.", "يلزم التحقق من الشريك قبل أن تصبح أموال المحفظة قابلة للسحب.")}</p></section>
-    <section className="panel"><h2>{availability.provider.name} · {text("Wallet withdrawals", "سحب المحفظة")}</h2><p><strong>{text("Unavailable", "غير متاح")}</strong></p><p>{text(availability.provider.reason, "تم اختيار Amazon Payment Services لمعالجة المدفوعات. يظل سحب المحفظة غير متاح إلى أن يتم التحقق تعاقدياً وفنياً من قدرة APS على صرف الأموال للمستفيدين. عمليات استرداد البطاقات وتسوية التاجر ليست عمليات سحب للمحفظة.")}</p><button type="button" disabled>{text("Request payout", "طلب سحب")}</button><small>{text("No wallet funds will be held while the provider is unavailable.", "لن يتم حجز أي رصيد من المحفظة ما دام المزود غير متاح.")}</small><div className="list">{availability.history.map((item)=><article key={item.public_id}><strong>{item.public_id} · {item.status.replaceAll("_", " ")}</strong><small>{(Number(item.amount_fils)/1000).toFixed(3)} JOD · {item.alias_masked} · {new Date(item.requested_at).toLocaleString()}</small></article>)}</div></section>
+    <section className={`panel payout-provider-card ${simulation ? "is-simulation" : "is-unavailable"}`}>
+      <header className="payout-provider-heading"><div><p className="eyebrow">{availability.provider.name}</p><h2>{text("Wallet withdrawals", "سحب المحفظة")}</h2></div><span className="status-badge">{simulation ? text("Simulation only", "محاكاة فقط") : text("Unavailable", "غير متاح")}</span></header>
+      <p>{simulation
+        ? text("This proof of concept exercises the real application lifecycle without contacting APS or moving money. Production remains disabled until beneficiary-disbursement capability is contracted and verified.", "يختبر هذا النموذج دورة التطبيق الفعلية دون الاتصال بـ APS أو تحويل أموال. يظل الإنتاج معطلاً حتى يتم التعاقد على قدرة صرف الأموال للمستفيدين والتحقق منها.")
+        : text(availability.provider.reason, "تم اختيار Amazon Payment Services لمعالجة المدفوعات. يظل سحب المحفظة غير متاح إلى أن يتم التحقق تعاقدياً وفنياً من قدرة APS على صرف الأموال للمستفيدين. عمليات استرداد البطاقات وتسوية التاجر ليست عمليات سحب للمحفظة.")}</p>
+      {simulation ? <form className="payout-request-form" onSubmit={(event) => { event.preventDefault(); void request(event.currentTarget); }}>
+        <label>{text("Test destination label", "تسمية وجهة الاختبار")}<input name="destinationAlias" required minLength={4} maxLength={80} placeholder={text("Simulation bank ••0042", "بنك المحاكاة ••0042")} autoComplete="off" /></label>
+        <label>{text("Amount (JOD)", "المبلغ (دينار)")}<input name="amountJod" required inputMode="decimal" pattern="[0-9]+(?:\.[0-9]{1,3})?" placeholder="12.500" /></label>
+        <div className="payout-form-submit"><button disabled={pending || !availability.verified || availability.withdrawableFils <= 0}>{text(pending ? "Requesting…" : "Request simulated payout", pending ? "جارٍ الطلب…" : "طلب سحب تجريبي")}</button><small>{text("Use a masked test label only—never enter real bank or card details.", "استخدم تسمية اختبار مخفية فقط—لا تدخل بيانات مصرفية أو بيانات بطاقة حقيقية.")}</small></div>
+      </form> : <><button type="button" disabled>{text("Request payout", "طلب سحب")}</button><small>{text("No wallet funds will be held while the provider is unavailable.", "لن يتم حجز أي رصيد من المحفظة ما دام المزود غير متاح.")}</small></>}
+      <p className="operation-result" aria-live={live}>{message}</p>
+      <div className="list payout-history">{availability.history.length ? availability.history.map((item)=><article key={item.public_id}><div><strong>{item.public_id}</strong><span className="status-badge">{item.status.replaceAll("_", " ")}</span></div><small>{(Number(item.amount_fils)/1000).toFixed(3)} JOD · {item.alias_masked} · {new Date(item.requested_at).toLocaleString()}</small>{item.provider_reference?<small>{text("Provider reference", "مرجع المزود")}: {item.provider_reference}</small>:null}</article>) : <p>{text("No payout requests yet.", "لا توجد طلبات سحب بعد.")}</p>}</div>
+    </section>
   </>;
 }
