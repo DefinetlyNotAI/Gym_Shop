@@ -1,0 +1,2 @@
+import { LocalizedText as T } from "@/components/language-provider";
+export default function Shipping(){return <main className="page prose"><h1><T en="Shipping and pickup" ar="التوصيل والاستلام"/></h1><p><T en="Availability, prices, windows, and pickup locations are shown only after staff configure and approve them. Internal tracking is used; no external carrier is implied." ar="تظهر مناطق التوصيل والأسعار والمواعيد ونقاط الاستلام فقط بعد إعدادها واعتمادها من الموظفين. نستخدم تتبعاً داخلياً ولا نفترض وجود شركة شحن خارجية."/></p></main>}
