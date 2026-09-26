@@ -9,3 +9,5 @@ coverage/
 !.env.example
 npm-debug.log*
 .vercel/
+CLAUDE.md
+AGENTS.md
