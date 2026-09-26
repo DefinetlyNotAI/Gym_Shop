@@ -1,0 +1,23 @@
+# Dependencies and framework output
+node_modules/
+.next/
+coverage/
+*.tsbuildinfo
+.vercel/
+
+# Local environment and logs
+.env*
+!.env.example
+npm-debug.log*
+
+# Local agent and editor state
+AGENTS.md
+CLAUDE.md
+.superpowers/
+.idea/
+.vscode/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

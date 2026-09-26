@@ -1,0 +1,11 @@
+Historical planning estimates — not verified current prices, provider selections, or implementation requirements.
+The original contains mixed units/inconsistent totals; do not use the total as a budget.
+
+ChatGPT Pro x5 -> $100/month
+Cloudflare Domain -> $10-20/year
+PurelyMail -> $10/year
+Cloudflare (Smart Shield Advanced + Zero Trust Free + Images & Stream) -> $50/month + $1 per additional 100,000 images over 5,000
+Cloudflare Pro -> $25/month
+Vercel Servers -> $20/month
+
+$20-40/year + $195/year

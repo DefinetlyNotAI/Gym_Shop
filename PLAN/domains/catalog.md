@@ -1,0 +1,15 @@
+# Catalog, products and variants
+
+Owns what can be sold and its descriptive metadata. [Inventory](inventory.md) owns quantities; [Pricing](pricing.md) owns effective reductions; [Reviews](support-reviews.md) owns ratings.
+
+## Requirements
+
+- **CAT-01 — Product identity/lifecycle:** ID, name, slug, short/full descriptions, brand, created/updated/published timestamps and actors; DRAFT, ACTIVE, HIDDEN, ARCHIVED. Hidden products are excluded from normal listings; direct-link/purchasability policy must be explicit. Archive products referenced by orders. Publication is independent of variant stock.
+- **CAT-02 — Classification and attributes:** Primary/additional categories, flexible collections, audience, product type, activity and tags. Structured material composition, fit, features, care, weight and optional manufacturing country/dimensions. Admin can create/edit/remove or retire metadata and restrict applicability by product type (e.g. clothing sizes do not appear for unrelated products). Categories are stable organization; collections are merchandising groups. No hardcoded size/color-only model.
+- **CAT-03 — Variants:** Configurable option dimensions; reusable ordered size systems and color swatches. Each purchasable combination has unique never-reused SKU, option values, default-price inheritance/override, optional compare-at price/barcode/weight override, enabled/purchasable flags, inventory-tracking flag, media and timestamps. Admin may specify SKUs with optional generation. Preserve original prices during sales. Product availability derives from purchasable variants, not a product-wide quantity.
+- **CAT-04 — Presentation:** Ordered primary/alternate images, optimized versions, alt text, variant/option galleries; optional hosted video with thumbnail/order. Product/category size-chart references support popups, not one global chart. Separate generated sale/stock badges from manual merchandising badges. Support related products manually and by category for v1. SEO title, description, slug, canonical URL, social image and structured product data with defaults and overrides.
+- **CAT-05 — Discovery/admin:** Search names, descriptions, SKU, category, collection, tags, color and type inside shop/category/collection views. Filters include category/collection/type/audience/size/color/fit/material/features/activity/price/in-stock/on-sale; sort/paginate consistently. Track important product changes. Duplication copies selected descriptive data/options/variants/media but never copies SKU, stock, reviews or sales history. Admin operations include lifecycle, metadata, media, size charts, SEO, badges and relationships.
+
+## Acceptance
+
+Create clothing and a capacity-based accessory without changing code; metadata only appears for applicable product types. Duplicate creates no reused SKU or copied stock/history. Selecting a color switches its gallery; unavailable variants do not block available siblings. Archiving or editing a product preserves historical orders. Public listings honor visibility and filters; media honors ARC-15/16.

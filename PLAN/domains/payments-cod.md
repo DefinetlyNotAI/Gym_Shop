@@ -1,0 +1,49 @@
+# Payments, driver cash and refunds
+
+Owns payment evidence, cash custody, payout integration and refund execution. Order, delivery and stock remain separate domain owners. Amazon Payment Services is the selected card provider; no undocumented endpoint or optional product is assumed.
+
+## PAY-01 — Card payments
+
+Use [Amazon Payment Services Hosted Checkout](https://paymentservices.amazon.com/docs/api/accepting-payments/hosted-checkout); the app never stores PAN/CVV. Submit a signed `PURCHASE` form to the documented sandbox/production checkout endpoint. Bind its unique `merchant_reference` to one order, exact JOD minor-unit amount and quote version. Validate every return/webhook with the configured SHA response phrase, and use the signed [Check Status API](https://paymentservices.amazon.com/docs/api/managing-payments/check-status) before treating an uncertain result as final. Browser navigation or an unsigned payload never establishes success. Deduplicate by APS `fort_id`, merchant reference, provider event and business operation.
+
+Implement only Hosted Checkout purchase, response/webhook validation, check status and the [Refund API](https://paymentservices.amazon.com/docs/api/managing-payments/refund) needed by current order flows. Do not add payment links, installments, token storage, recurring payments, currency conversion or unrelated APS features. Sign parameters exactly as APS documents: remove `signature`, exclude nulls, sort keys case-sensitively, concatenate `key=value` pairs without separators, wrap with the appropriate request/response phrase, UTF-8 encode and SHA-256 hash. Never expose or log either SHA phrase. JOD uses three minor-unit decimals; enforce the documented Visa rule that the final decimal is zero before creating a card intent instead of silently changing an accepted order total.
+
+Proposed reservation: fifteen minutes before confirmed processing; a provider-processing state enters bounded reconciliation instead of browser-refresh extensions. Query uncertain payment before releasing allocation. If success arrives after customer cancellation, always create an idempotent full-refund obligation and never revive the order. After expiry without customer cancellation, reacquire stock only if the accepted payment-intent policy still authorizes confirmation; otherwise refund. Alert Finance and never dispatch an unallocated order. Provider deadlines must replace proposals before activation. Persist durable processing/refund tasks across serverless interruptions.
+
+## PAY-02 — COD customer collection
+
+Accepted COD confirms the order and commits allocation while the cash balance is still due. Track external amount due, method, payer receipt and collection separately from driver/Finance settlement. Partial wallet tender reduces cash due but does not alter price. Optional customer COD limits/risk review are configured and audited, not silently inferred from IP.
+
+At dispatch issue an immutable manifest: driver, packages/orders, expected cash and custody acceptance. Driver may record exact collection only for assigned shipment, alongside attended customer PIN, server timestamp and receipt; change given is explicit, not an invented discount. Drivers cannot edit prices/due amounts, grant refunds, alter tender, read card credentials, see customer PINs, settle their own cash, delete attempts or write ledger corrections. Deny mark-delivered while required COD balance is uncollected unless authorized staff creates a separately audited exception.
+
+Customer receipt separates amount collected and payment method; customer can dispute false collection/delivery. Delivery proof is not proof of bank deposit, and a deposit does not prove customer delivery. Reward qualification uses genuine customer collection plus delivery, not later driver remittance.
+
+## PAY-03 — Anti-theft and reconciliation
+
+Keep append-only collection, handover, discrepancy, deposit and adjustment entries linked to original receipts. Independent Finance staff counts/accepts each driver handover; both actors acknowledge amounts. Match expected collection, customer-confirmed receipts, actual handover and bank deposit. Separate states include DUE, COLLECTED_BY_DRIVER, HANDED_OVER, VERIFIED_BY_FINANCE, DEPOSITED, DISPUTED; permit partial handovers without marking the remainder settled.
+
+Approved controls (operational values configurable): route-end/end-shift handover with daily reconciliation before more COD work; configurable maximum driver-held balance blocks further COD assignments; overdue cash/missing packages trigger Finance/management alerts. Do not disable a driver's ability to surrender funds or record a current attempt when blocking new work. Reassignments/driver disablement preserve unresolved custody and transfer history. Cash held = accepted collections minus independently acknowledged handovers and authorized corrections, not orders delivered.
+
+Drivers never approve their own adjustments; a Finance actor cannot approve their own correction/payout/refund adjustment. Use a distinct authorized reviewer; single-owner exceptional action needs explicit reason, step-up auth and highest-priority audit. Flag unusual failed-attempt clusters, missing PIN/proof, cash deficits, excess corrections and recipient disputes for investigation; do not auto-convict drivers or deduct wages. Proof/location/receipts reduce risk but do not guarantee theft prevention.
+
+## PAY-04 — Refunds, zero totals and adjustments
+
+Before PACKED, cancel atomically against packing; full refund means all tender actually collected for that order, including shipping/order fees. Restore original wallet-source lots without expiry; card money returns through the original APS transaction. Unpaid COD creates no fictitious cash refund. Paid COD refund needs independently verified collection and an approved refund destination/method, receipt and Finance confirmation; driver must not repay customer from unrecorded route cash. APS card refunds cannot repay cash that APS never captured; an approved bank/manual cash workflow must exist before COD launch unless APS supplies a separately documented and approved disbursement contract.
+
+Unavailable approved damaged-item replacement may resolve to refund without substitute search; alternative requires customer consent. Proposed partial-damage refund equals original affected-line net paid allocation, not current catalog price, with proportional rewards reversed. Shipping treatment for partial damage and statutory exceptions require DEC-06. Full refund cannot convert original card money to freely withdrawable wallet by default.
+
+Financial completion requires provider/bank/cash evidence; initiated is not refunded. Track partial/refunded totals atomically across claims, prevent over-refund, reverse rewards/counters where applicable and reconcile in-flight conflicts. Fully wallet-funded order confirms from successful wallet capture; zero-value replacement confirms from approved claim, neither fabricates card/COD collection. Stock still allocates/dispatches.
+
+## PAY-05 — Amazon Payment Services wallet withdrawals (capability pending)
+
+User-selected replacement on 2026-09-12: [Amazon Payment Services](https://paymentservices.amazon.com/docs/api). Hosted Checkout, signed responses, Check Status and original-transaction refunds are the documented payment contract in PAY-01/PAY-04. [Withdrawal capability evaluation](../reference/jordan-payout-options.md) records the separate all-source wallet requirement; selecting APS does not establish an undocumented transfer API.
+
+Finance review/approval precedes automated beneficiary transfer. APS must confirm merchant-approved Jordan/JOD disbursement of all-source loyalty, referral, review and other wallet balances, and supply API documentation, access approval, recipient validation, credentials, limits, fees, idempotency, status/receipt lookup and sandbox evidence. The public Refund API is limited to the remaining refundable amount of an original captured transaction; neither refunds nor merchant-account settlement substitute for arbitrary wallet withdrawals. No endpoints/signatures are invented. Withdrawals remain unavailable with a clear capability explanation until this contract is verified; no fake Completed state. Unsupported capability requires a new explicit user decision, not silent deferral or alternative-provider selection.
+
+Persist one transfer intent and hold. Provider response/verified callback/query yields definitive success/failure; uncertain timeout remains UNKNOWN with hold and reconciliation. Do not retry blind. Recheck verification/freeze and beneficiary at execution. Provider tariff, not card-acquirer fees alone, sets economically viable minimum. Proposed twenty-five-JOD floor in Defaults is a review value, not a cost guarantee.
+
+## Acceptance
+
+Last-unit card/COD race allocates once; unpaid COD can dispatch but cannot falsely become collected. Two-driver assignment cannot expose another route's cash/PII. Customer PIN never appears in driver/API responses. Collection plus partial handover leaves correct outstanding liability; driver cannot reconcile own cash. Duplicate APS returns/webhooks/status results, receipts and refunds never repeat value. COD return is inspected before stock restoration. Unknown card/withdrawal outcome remains reconcilable.
+
+Approved launch cash controls: admin-configured driver cash ceiling (selected initial 100 JOD, configure against route size) must consider existing cash plus potential collections on new assignments. Finance confirms handover independently; a second reviewer reconciles deposits against bank statements. Block new COD routes for overdue/unexplained exposure while permitting cash surrender. No automatic wage deduction or wallet collection of disputed fees. DEL-03 alone determines COD redelivery amounts; cash receipts itemize the original fee and one 2D redelivery fee.

@@ -1,0 +1,14 @@
+# Inventory and reservations
+
+Owns quantities for exact catalog variants at one v1 stock location. [Orders](orders.md) orchestrates payment; [Support](support-reviews.md) authorizes claims; neither writes stock directly.
+
+## Requirements
+
+- **INV-01 — Stock ledger:** Per tracked variant: on-hand, reserved, available = on-hand minus reserved, threshold, tracking flag and updated time. Available inventory must not become negative. States: in stock, low stock, out of stock, unavailable. Preserve permanent movements for restock, sale, reservation/release, cancellation, damage, loss, correction, replacement and adjustment with source references.
+- **INV-02 — Reservations/dispatch:** Cart additions do not reserve. Atomically reserve selected variants/quantities with account/order/expiry. Card payment reservation becomes committed allocation after confirmation; accepted COD orders allocate before cash collection. Committed allocations do not expire as abandoned checkout. Dispatch decrements on-hand and releases allocation once for either method, transferring physical custody to shipment/driver. Payment/delivery events never decrement again. Pre-pack cancellation releases allocation; failed post-dispatch delivery needs physical warehouse return/inspection before sellable restock. Replacement follows the same path. PAY-01/02 define bounded in-flight payment reconciliation. The original payment-time physical stock deduction is superseded for COD correctness.
+- **INV-03 — Operations:** Restock single/batches with quantities, received date, staff and optional supplier/reference/unit cost. Adjustments record reason, actor, time, before/after and optional comment; Other requires explanation. Support restock, damaged, lost, found, stock count, supplier correction, replacement and other reasons. Damaged stock leaves sellable inventory through a movement; optional internal evidence. Approved zero-value replacements consume actual stock through the order workflow. Cancellation restores stock only under ORD-04.
+- **INV-04 — Views and events:** Global low-stock default with per-variant override; flag at/below threshold. Show customer availability and optionally exact low quantity; unavailable variants remain visible. Search SKU/product; filter category/state; inspect reservations/history; batch adjust/restock; export; audit manual changes. Emit availability and low-stock events. Exact-variant subscription/delivery belongs to NOT-03, not a second inventory notification system.
+
+## Acceptance
+
+Ten on-hand and two reserved gives eight available; card confirmation/COD acceptance retains that allocation; dispatch gives eight on-hand/zero reserved. Two concurrent requests for the final unit allow only one reservation. Replayed payment/release/restock cannot double-count. Stale carts are corrected. In-flight payment/expiry races follow PAY-01/02. Replacement movement references its order/claim; reconciliation can explain the stock balance.
