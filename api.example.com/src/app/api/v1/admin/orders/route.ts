@@ -1,0 +1,2 @@
+import { apiError,apiSuccess } from "@/lib/api/response";import {getCurrentAccount} from "@/lib/auth/session";import {requirePermission} from "@/lib/auth/authorization";import {listOperationalOrders} from "@/lib/commerce/fulfillment";
+export async function GET(){try{await requirePermission(await getCurrentAccount(),'orders.read');return apiSuccess({orders:await listOperationalOrders()});}catch{return apiError(403,{code:'PERMISSION_DENIED',message:'Permission denied.'});}}

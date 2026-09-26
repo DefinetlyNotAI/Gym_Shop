@@ -1,0 +1,1 @@
+import{apiSuccess}from"@/lib/api/response";import{listTaxonomy}from"@/lib/commerce/catalog";export async function GET(){const[categories,collections]=await Promise.all([listTaxonomy("category"),listTaxonomy("collection")]);return apiSuccess({categories,collections});}

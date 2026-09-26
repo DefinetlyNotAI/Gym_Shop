@@ -1,0 +1,50 @@
+{
+  "name": "@gym-shop/api",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20.19.0" },
+  "scripts": {
+    "dev": "next dev -p 5000",
+    "build": "next build",
+    "start": "next start -p 5000",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:acceptance": "node scripts/verify-v01.mjs",
+    "test:acceptance:v02": "node scripts/verify-v02.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:verify": "node scripts/verify-migrations.mjs",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:check": "drizzle-kit check --config drizzle.config.ts",
+    "security:create-cto-setup": "node scripts/create-cto-setup.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1127.0",
+    "@aws-sdk/s3-request-presigner": "3.1127.0",
+    "@electric-sql/pglite": "0.5.8",
+    "@neondatabase/serverless": "1.1.0",
+    "@node-rs/argon2": "2.2.0",
+    "@simplewebauthn/server": "14.0.1",
+    "drizzle-orm": "1.0.0-rc.4",
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "ws": "8.21.3",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@eslint/compat": "2.1.1",
+    "@types/node": "26.5.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@types/ws": "8.18.1",
+    "drizzle-kit": "1.0.0-rc.4",
+    "eslint": "10.10.0",
+    "eslint-config-next": "16.3.4",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  },
+  "allowScripts": { "esbuild@0.25.12": true, "esbuild@0.28.2": true, "unrs-resolver@1.12.2": true },
+  "overrides": { "eslint": "10.10.0" }
+}

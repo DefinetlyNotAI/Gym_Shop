@@ -1,0 +1,1 @@
+import{apiSuccess}from"@/lib/api/response";import{getRuntimeConfig}from"@/lib/config/env";import{getPlatformState}from"@/lib/platform/state";export const dynamic="force-dynamic";export async function GET(){return apiSuccess({state:await getPlatformState(),simulation:getRuntimeConfig().SIM_MODE});}

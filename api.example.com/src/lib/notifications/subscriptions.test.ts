@@ -1,0 +1,2 @@
+import{describe,expect,it}from"vitest";import{isAvailabilityTransition}from"./subscriptions";
+describe("restock availability transition",()=>{it("emits only when an exact variant becomes available",()=>{expect(isAvailabilityTransition(0,1)).toBe(true);expect(isAvailabilityTransition(-1,2)).toBe(true);expect(isAvailabilityTransition(1,2)).toBe(false);expect(isAvailabilityTransition(0,0)).toBe(false);});});

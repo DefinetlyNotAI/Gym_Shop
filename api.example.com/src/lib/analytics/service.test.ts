@@ -1,0 +1,2 @@
+import{describe,expect,it}from"vitest";import{analyticsGroups}from"./service";
+describe("analytics role scope",()=>{it("keeps Finance and Logistics measures separated",()=>{expect(analyticsGroups("FINANCE_STAFF")).toContain("finance");expect(analyticsGroups("FINANCE_STAFF")).not.toContain("inventory");expect(analyticsGroups("LOGISTICS_STAFF")).toContain("inventory");expect(analyticsGroups("LOGISTICS_STAFF")).not.toContain("finance");expect(analyticsGroups("DELIVERY_AGENT")).toEqual(["delivery"]);});});

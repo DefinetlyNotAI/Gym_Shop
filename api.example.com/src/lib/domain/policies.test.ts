@@ -1,0 +1,10 @@
+import{describe,expect,it}from"vitest";import{advanceRecovery,canCustomerCancel,codDeliveryFee,damageClaimEligible,nextAmmanDeliveryDate,otpValid,safeAddMoney}from"./policies";
+describe("v0.1 policies",()=>{
+  it("adds the reviewed fixed 2 JOD fee only when a third COD attempt is made",()=>{expect(codDeliveryFee(3000,1)).toBe(3000);expect(codDeliveryFee(3000,2)).toBe(3000);expect(codDeliveryFee(3000,3)).toBe(5000);});
+  it("stops customer cancellation at packed",()=>{expect(canCustomerCancel("PROCESSING")).toBe(true);expect(canCustomerCancel("PACKED")).toBe(false);});
+  it("includes the exact seven-day damage boundary",()=>{const delivered=new Date("2026-01-01T00:00:00Z");expect(damageClaimEligible(delivered,new Date("2026-01-08T00:00:00Z"))).toBe(true);expect(damageClaimEligible(delivered,new Date("2026-01-08T00:00:00.001Z"))).toBe(false);});
+  it("enforces recovery order and absolute deadline",()=>{const start=new Date("2026-01-01T00:00:00Z");expect(advanceRecovery("CAPTCHA","CAPTCHA",start,new Date("2026-01-01T00:01:00Z"))).toBe("EMAIL_OTP");expect(()=>advanceRecovery("EMAIL_OTP","PHONE_OTP",start,new Date("2026-01-01T00:02:00Z"))).toThrow("OUT_OF_ORDER");expect(()=>advanceRecovery("WEBAUTHN","WEBAUTHN",start,new Date("2026-01-01T00:30:00Z"))).toThrow("EXPIRED");});
+  it("expires and supersedes OTPs",()=>{const issued=new Date("2026-01-01T00:00:00Z");expect(otpValid(issued,new Date("2026-01-01T00:04:59Z"),false,false)).toBe(true);expect(otpValid(issued,new Date("2026-01-01T00:05:00Z"),false,false)).toBe(false);expect(otpValid(issued,new Date("2026-01-01T00:01:00Z"),false,true)).toBe(false);});
+  it("uses integer money only",()=>{expect(safeAddMoney(1000,2000)).toBe(3000);expect(()=>safeAddMoney(.1)).toThrow("MONEY_INVALID");});
+  it("selects the next configured weekday in Amman without reusing today",()=>{expect(nextAmmanDeliveryDate(4,new Date("2026-01-07T22:30:00Z"))).toBe("2026-01-15");expect(nextAmmanDeliveryDate(5,new Date("2026-01-07T22:30:00Z"))).toBe("2026-01-09");});
+});
