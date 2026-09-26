@@ -42,7 +42,7 @@ This is the authoritative status summary for the archived plan. The requirement 
 | Staff application | `admin.example.com/` | `http://localhost:4000` |
 | API | `api.example.com/` | `http://localhost:5000` |
 
-The three applications are independent Git and package repositories. `PLAN/` and the shared `run-sites.mjs` launcher are siblings outside those repositories. Commit or archive the workspace root separately if this plan and launcher must travel with the applications.
+The workspace is one Git monorepo. The three applications remain independent package and deployment roots with separate manifests, lockfiles and commands; `PLAN/` and the shared `run-sites.mjs` launcher are tracked at the repository root.
 
 ## Resume checklist
 

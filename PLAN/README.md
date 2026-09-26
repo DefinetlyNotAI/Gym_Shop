@@ -1,6 +1,6 @@
 # Gym Shop implementation plan
 
-Start here. This directory is the canonical product and release contract. Implementation lives in three independently deployable applications: `../example.com`, `../api.example.com`, and `../admin.example.com`.
+Start here. This directory is the canonical product and release contract for the Gym Shop monorepo. Implementation lives in three independently deployable applications: `../example.com`, `../api.example.com`, and `../admin.example.com`.
 
 For the archival snapshot of what is implemented, verified, blocked and not started, read [Implementation and activation status](STATUS.md) before using the requirement documents.
 
