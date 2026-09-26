@@ -1,0 +1,80 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFile } from "node:fs/promises";
+import ts from "typescript";
+
+test("staff defaults to port 4000 and links to the storefront on port 3030", async () => {
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  const switcher = await readFile(
+    new URL("../src/components/simulation-switcher.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(packageJson.scripts.dev, "next dev -p 4000");
+  assert.equal(packageJson.scripts.start, "next start -p 4000");
+  assert.match(switcher, /http:\/\/localhost:3030/);
+});
+
+test("staff server links use the local storefront during development", async () => {
+  const source = await readFile(
+    new URL("../src/lib/runtime-origin.ts", import.meta.url),
+    "utf8",
+  );
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    },
+  }).outputText;
+  const runtimeModule = await import(
+    `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}#storefront`
+  );
+  assert.equal(
+    runtimeModule.configuredStorefrontOrigin({ NODE_ENV: "development" }),
+    "http://localhost:3030",
+  );
+  assert.equal(
+    runtimeModule.configuredStorefrontOrigin({ NODE_ENV: "production" }),
+    "https://example.com",
+  );
+  assert.throws(
+    () => runtimeModule.configuredStorefrontOrigin({ STOREFRONT_ORIGIN: "http://localhost:3030/path" }),
+    /exact origin/,
+  );
+});
+
+test("staff development proxies to the local API on port 5000 by default", async () => {
+  const source = await readFile(
+    new URL("../next.config.ts", import.meta.url),
+    "utf8",
+  );
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    },
+  }).outputText;
+  const previousApiOrigin = process.env.API_ORIGIN;
+  const previousNodeEnvironment = process.env.NODE_ENV;
+  delete process.env.API_ORIGIN;
+  process.env.NODE_ENV = "development";
+  try {
+    const config = (
+      await import(
+        `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}#staff`
+      )
+    ).default;
+    const rewrites = await config.rewrites();
+    assert.equal(
+      rewrites[0].destination,
+      "http://localhost:5000/api/:path*",
+    );
+  } finally {
+    if (previousApiOrigin === undefined) delete process.env.API_ORIGIN;
+    else process.env.API_ORIGIN = previousApiOrigin;
+    if (previousNodeEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnvironment;
+  }
+});

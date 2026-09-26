@@ -1,0 +1,1 @@
+import{StaffEnrollment}from"@/components/staff-enrollment";export default function Enrollment(){return <main className="page auth-page"><h1>Staff security enrollment</h1><p>Use the invitation delivered to your verified email and enroll the required phishing-resistant security key or keys.</p><StaffEnrollment/></main>}
